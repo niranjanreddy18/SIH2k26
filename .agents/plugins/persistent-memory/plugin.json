@@ -1,0 +1,4 @@
+{
+  "name": "persistent-memory",
+  "description": "Persistent memory and knowledge graph subsystem for Antigravity, retaining user context, project conventions, login states, and architectural decisions across sessions."
+}
