@@ -46,6 +46,14 @@ export interface User {
   department: string | null;
 }
 
+export interface AdminUser extends User {
+  mfaEnabled?: boolean;
+  failedLoginAttempts?: number;
+  lockedUntil?: string | null;
+  isLocked?: boolean;
+  createdAt?: string;
+}
+
 export interface Case {
   id: string;
   firNumber: string;
@@ -76,6 +84,8 @@ export interface DocumentVersion {
   status: VersionStatus;
   fileSize?: number;
   mimeType?: string;
+  comment?: string | null;
+  blockchainRef?: string | null;
   createdBy?: { id: string; name: string } | string;
   createdAt: string;
 }
@@ -87,10 +97,13 @@ export interface Document {
   type: DocumentType;
   classification: ClassificationTier;
   currentVersion?: DocumentVersion;
+  createdBy?: { id: string; name: string } | string;
+  createdAt?: string;
   versionHistory?: { versionNo: number; status: VersionStatus; createdAt: string }[];
 }
 
 export interface EvidenceCustodyEvent {
+  id?: string;
   action: string;
   from?: { id: string; name: string } | null;
   to: { id: string; name: string };
@@ -106,21 +119,62 @@ export interface Evidence {
   status: string;
   collectedBy: { id: string; name: string } | string;
   collectedAt: string;
+  custodyEventCount?: number;
 }
 
 export interface AuditEvent {
   id: string;
-  actor: { id: string; name: string };
+  actor: { id: string; name: string; email?: string; role?: string };
   action: string;
+  targetType?: string;
+  targetId?: string;
   result: 'SUCCESS' | 'FAILURE';
+  eventHash?: string;
+  prevEventHash?: string;
   createdAt: string;
 }
 
 export interface VerificationResult {
   status: 'VERIFIED' | 'MISMATCH';
   registeredHash: string;
-  currentHash: string;
-  blockchainRef: string;
+  currentHash: string | null;
+  blockchainRef: string | null;
   verifiedAt: string;
+  error?: string;
 }
 
+export interface BlockchainRecord {
+  id: string;
+  refType: string;
+  refId: string;
+  versionNo?: number;
+  action: string;
+  hash: string;
+  prevHash: string;
+  txReference: string;
+  createdAt: string;
+}
+
+export interface ShareItem {
+  shareId: string;
+  canView: boolean;
+  canDownload: boolean;
+  expiresAt: string;
+  createdAt: string;
+  document: {
+    id: string;
+    name: string;
+    type?: DocumentType;
+  };
+  case: {
+    id: string;
+    firNumber: string;
+  };
+}
+
+export interface AuditVerifyChainResult {
+  status: 'CHAIN_INTACT' | 'CHAIN_BROKEN';
+  totalEvents: number;
+  brokenAt: string | null;
+  verifiedAt: string;
+}

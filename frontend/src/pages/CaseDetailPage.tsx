@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, FileText, Upload, ShieldCheck, Share2, 
   Box, CheckCircle2, XCircle, FileSignature, Lock, 
-  RefreshCw, History, AlertTriangle, Eye 
+  RefreshCw, History, AlertTriangle, Eye, Download, Link2, Clock, Send
 } from 'lucide-react';
 import api from '../services/api';
 import { Case, Document, Evidence, AuditEvent } from '../types';
@@ -10,7 +10,9 @@ import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { DocumentUploadModal } from '../components/DocumentUploadModal';
 import { VerificationModal } from '../components/VerificationModal';
+import { BlockchainLedgerModal } from '../components/BlockchainLedgerModal';
 import { EvidenceModal } from '../components/EvidenceModal';
+import { EvidenceTimelineModal } from '../components/EvidenceTimelineModal';
 import { ShareModal } from '../components/ShareModal';
 
 interface Props {
@@ -31,7 +33,10 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
   const [showUpload, setShowUpload] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
   const [verifyDoc, setVerifyDoc] = useState<{ id: string; name: string } | null>(null);
+  const [ledgerDoc, setLedgerDoc] = useState<{ id: string; name: string } | null>(null);
   const [shareDoc, setShareDoc] = useState<{ id: string; name: string } | null>(null);
+  const [timelineEv, setTimelineEv] = useState<{ id: string; type: string } | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const fetchCaseDetails = async () => {
     setLoading(true);
@@ -41,11 +46,19 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
         setCaseData(caseRes.data.data);
       }
 
-      // Fetch documents (simulated by querying or fetching case detail)
-      // For demo, fetch document details if present in store
-      const sampleDocRes = await api.get(`/documents/doc-1111-1111-1111-111111111111`).catch(() => null);
-      if (sampleDocRes && sampleDocRes.data.success) {
-        setDocuments([sampleDocRes.data.data]);
+      const docRes = await api.get(`/cases/${caseId}/documents`);
+      if (docRes.data.success) {
+        setDocuments(docRes.data.data.items || []);
+      }
+
+      const evRes = await api.get(`/cases/${caseId}/evidence`);
+      if (evRes.data.success) {
+        setEvidenceList(evRes.data.data.items || []);
+      }
+
+      const auditRes = await api.get(`/cases/${caseId}/audit`);
+      if (auditRes.data.success) {
+        setAuditEvents(auditRes.data.data.items || []);
       }
     } catch (err) {
       console.error('Failed to load case details:', err);
@@ -62,7 +75,7 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
     try {
       let body = {};
       if (action === 'approve' || action === 'reject') {
-        body = { comment: `Action ${action} executed by ${user?.name}` };
+        body = { comment: `Action ${action.toUpperCase()} recorded by ${user?.name}` };
       }
       const res = await api.post(`/documents/${docId}/${action}`, body);
       if (res.data.success) {
@@ -74,239 +87,331 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
     }
   };
 
-  if (loading || !caseData) {
-    return <div className="p-12 text-center text-xs text-slate-500">Loading case details...</div>;
+  const handleDownloadDocument = async (docId: string, docName: string) => {
+    setDownloadingId(docId);
+    try {
+      const res = await api.get(`/documents/${docId}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', docName || 'document.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err: any) {
+      alert('Download failed: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  if (loading && !caseData) {
+    return (
+      <div className="py-20 text-center flex flex-col items-center gap-3 text-slate-500 text-xs">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+        Loading case file & cryptographic signatures...
+      </div>
+    );
   }
+
+  if (!caseData) {
+    return <div className="p-12 text-center text-xs text-slate-500">Case record not found.</div>;
+  }
+
+  const isSeniorOfficer = user?.role === 'SENIOR_OFFICER' || user?.role === 'ADMIN';
 
   return (
     <div className="space-y-6">
       {/* Top Navigation */}
       <button
         onClick={onBack}
-        className="px-3 py-1.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-800 transition-colors"
+        className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-2 border border-slate-200 transition-colors shadow-xs"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Cases
       </button>
 
       {/* Case Header Card */}
-      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-4">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-sm font-bold text-indigo-400 bg-indigo-950/60 px-2.5 py-1 rounded border border-indigo-800">
+              <span className="font-mono text-sm font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
                 {caseData.firNumber}
               </span>
               <StatusBadge type="status" value={caseData.status} />
               <StatusBadge type="classification" value={caseData.classification} />
             </div>
-            <h2 className="text-xl font-extrabold text-slate-100 mt-2">{caseData.title}</h2>
-            <p className="text-xs text-slate-400 mt-1">{caseData.description || 'No additional summary recorded.'}</p>
+            <h2 className="text-xl font-extrabold text-slate-900 mt-2">{caseData.title}</h2>
+            <p className="text-xs text-slate-500 mt-1">{caseData.description || 'No additional summary recorded.'}</p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setShowUpload(true)}
-              className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors shadow-lg shadow-indigo-600/20"
+              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-blue-600/20"
             >
               <Upload className="w-4 h-4" /> Add Document
             </button>
             <button
               onClick={() => setShowEvidence(true)}
-              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700 transition-colors"
+              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-2 border border-slate-200 transition-colors"
             >
-              <Box className="w-4 h-4 text-emerald-400" /> Register Evidence
+              <Box className="w-4 h-4 text-emerald-600" /> Register Evidence
             </button>
           </div>
         </div>
 
         {/* Sub-counts Summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-800/80 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-100 text-xs">
           <div>
-            <span className="text-slate-500">Crime Type:</span>
-            <span className="text-slate-200 ml-2 font-medium">{caseData.crimeType || 'N/A'}</span>
+            <span className="text-slate-400 font-medium">Crime Type:</span>
+            <span className="text-slate-800 ml-2 font-bold">{caseData.crimeType || 'General'}</span>
           </div>
           <div>
-            <span className="text-slate-500">Registered By:</span>
-            <span className="text-slate-200 ml-2 font-medium">
-              {typeof caseData.createdBy === 'object' ? caseData.createdBy.name : 'Lead Officer'}
+            <span className="text-slate-400 font-medium">Lead Investigator:</span>
+            <span className="text-slate-800 ml-2 font-bold">
+              {typeof caseData.createdBy === 'object' ? caseData.createdBy.name : 'Officer'}
             </span>
           </div>
           <div>
-            <span className="text-slate-500">Documents Hashed:</span>
-            <span className="text-indigo-400 font-mono font-bold ml-2">{caseData.counts?.documents || 1}</span>
+            <span className="text-slate-400 font-medium">Documents Hashed:</span>
+            <span className="text-blue-600 font-mono font-bold ml-2">{documents.length}</span>
           </div>
           <div>
-            <span className="text-slate-500">Evidence Items:</span>
-            <span className="text-emerald-400 font-mono font-bold ml-2">{caseData.counts?.evidence || 1}</span>
+            <span className="text-slate-400 font-medium">Evidence Tracked:</span>
+            <span className="text-emerald-600 font-mono font-bold ml-2">{evidenceList.length}</span>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800">
+      <div className="flex items-center gap-2 border-b border-slate-200">
         <button
           onClick={() => setActiveTab('documents')}
-          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
             activeTab === 'documents'
-              ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <FileText className="w-4 h-4" /> Hashed Case Documents
+          <FileText className="w-4 h-4" /> Case Documents ({documents.length})
         </button>
         <button
           onClick={() => setActiveTab('evidence')}
-          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2 ${
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
             activeTab === 'evidence'
-              ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
-          <Box className="w-4 h-4" /> Evidence & Custody Chain
+          <Box className="w-4 h-4" /> Evidence & Custody Chain ({evidenceList.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('audit')}
+          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'audit'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <History className="w-4 h-4" /> Case Audit Trail ({auditEvents.length})
         </button>
       </div>
 
-      {/* Documents Tab Content */}
+      {/* ─── Documents Tab Content ─── */}
       {activeTab === 'documents' && (
         <div className="space-y-4">
-          {documents.map((doc) => (
-            <div key={doc.id} className="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-indigo-400 uppercase font-mono">{doc.type}</span>
-                    <StatusBadge type="classification" value={doc.classification} />
-                    {doc.currentVersion && <StatusBadge type="status" value={doc.currentVersion.status} />}
-                  </div>
-                  <h3 className="text-base font-bold text-slate-100 mt-1">{doc.name}</h3>
-                </div>
-
-                {/* Workflow & Verification Actions */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setVerifyDoc({ id: doc.id, name: doc.name })}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <ShieldCheck className="w-4 h-4" /> Verify Integrity
-                  </button>
-
-                  <button
-                    onClick={() => setShareDoc({ id: doc.id, name: doc.name })}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" /> Share
-                  </button>
-
-                  {/* Workflow Action Buttons */}
-                  {doc.currentVersion?.status === 'DRAFT' && (
-                    <button
-                      onClick={() => handleWorkflowAction(doc.id, 'submit')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-                    >
-                      Submit for Review
-                    </button>
-                  )}
-
-                  {(doc.currentVersion?.status === 'SUBMITTED' || doc.currentVersion?.status === 'UNDER_REVIEW') && user?.role === 'SENIOR_OFFICER' && (
-                    <>
-                      <button
-                        onClick={() => handleWorkflowAction(doc.id, 'approve')}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                      </button>
-                      <button
-                        onClick={() => handleWorkflowAction(doc.id, 'reject')}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-                      >
-                        <XCircle className="w-3.5 h-3.5" /> Reject
-                      </button>
-                    </>
-                  )}
-
-                  {doc.currentVersion?.status === 'APPROVED' && user?.role === 'SENIOR_OFFICER' && (
-                    <button
-                      onClick={() => handleWorkflowAction(doc.id, 'sign')}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
-                    >
-                      <FileSignature className="w-3.5 h-3.5" /> Sign Document
-                    </button>
-                  )}
-
-                  {doc.currentVersion?.status === 'SIGNED' && user?.role === 'SENIOR_OFFICER' && (
-                    <button
-                      onClick={() => handleWorkflowAction(doc.id, 'lock')}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-700 hover:bg-indigo-900 text-xs font-semibold flex items-center gap-1 transition-colors"
-                    >
-                      <Lock className="w-3.5 h-3.5" /> Lock & Anchor Ledger
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Version & Fingerprint info */}
-              {doc.currentVersion && (
-                <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 text-xs font-mono space-y-1">
-                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                    <span>Current Version: v{doc.currentVersion.versionNo}</span>
-                    <span>Uploaded: {new Date(doc.currentVersion.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="text-slate-300 flex items-center gap-2">
-                    <span className="text-slate-500">SHA-256:</span>
-                    <span className="text-emerald-400 truncate">{doc.currentVersion.hash}</span>
-                  </div>
-                </div>
-              )}
+          {documents.length === 0 ? (
+            <div className="py-16 text-center bg-white p-8 rounded-2xl border border-slate-200 text-xs text-slate-400">
+              No documents uploaded for this case yet. Click "Add Document" above to register an investigation file.
             </div>
-          ))}
+          ) : (
+            documents.map((doc) => {
+              const status = doc.currentVersion?.status || 'DRAFT';
+
+              return (
+                <div key={doc.id} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 hover:border-slate-300 transition-colors shadow-xs">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-blue-700 uppercase font-mono">{doc.type}</span>
+                        <StatusBadge type="classification" value={doc.classification} />
+                        {doc.currentVersion && <StatusBadge type="status" value={doc.currentVersion.status} />}
+                        <span className="text-[11px] font-mono font-semibold text-slate-400">v{doc.currentVersion?.versionNo || 1}</span>
+                      </div>
+                      <h3 className="text-base font-bold text-slate-900">{doc.name}</h3>
+                      {doc.currentVersion?.hash && (
+                        <div className="text-[11px] font-mono text-slate-500 truncate max-w-xl">
+                          SHA-256: <span className="text-slate-700 font-semibold">{doc.currentVersion.hash}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions Toolbar */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => setVerifyDoc({ id: doc.id, name: doc.name })}
+                        className="px-3.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" /> Verify Integrity
+                      </button>
+
+                      <button
+                        onClick={() => setLedgerDoc({ id: doc.id, name: doc.name })}
+                        className="px-3.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      >
+                        <Link2 className="w-4 h-4 text-indigo-600" /> Blockchain Blocks
+                      </button>
+
+                      <button
+                        onClick={() => handleDownloadDocument(doc.id, doc.name)}
+                        disabled={downloadingId === doc.id}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      >
+                        <Download className="w-4 h-4 text-slate-600" /> {downloadingId === doc.id ? 'Downloading...' : 'Download'}
+                      </button>
+
+                      <button
+                        onClick={() => setShareDoc({ id: doc.id, name: doc.name })}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                      >
+                        <Share2 className="w-4 h-4 text-slate-600" /> Share
+                      </button>
+
+                      {/* Workflow Transitions */}
+                      {status === 'DRAFT' && (
+                        <button
+                          onClick={() => handleWorkflowAction(doc.id, 'submit')}
+                          className="px-3.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 text-xs font-bold flex items-center gap-1"
+                        >
+                          <Send className="w-3.5 h-3.5" /> Submit for Approval
+                        </button>
+                      )}
+
+                      {isSeniorOfficer && (status === 'SUBMITTED' || status === 'UNDER_REVIEW') && (
+                        <>
+                          <button
+                            onClick={() => handleWorkflowAction(doc.id, 'approve')}
+                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                          </button>
+                          <button
+                            onClick={() => handleWorkflowAction(doc.id, 'reject')}
+                            className="px-3.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> Reject
+                          </button>
+                        </>
+                      )}
+
+                      {isSeniorOfficer && status === 'APPROVED' && (
+                        <button
+                          onClick={() => handleWorkflowAction(doc.id, 'sign')}
+                          className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-blue-600/20"
+                        >
+                          <FileSignature className="w-3.5 h-3.5" /> Apply Digital Signature
+                        </button>
+                      )}
+
+                      {isSeniorOfficer && status === 'SIGNED' && (
+                        <button
+                          onClick={() => handleWorkflowAction(doc.id, 'lock')}
+                          className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-rose-600/20"
+                        >
+                          <Lock className="w-3.5 h-3.5" /> Lock Document
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
-      {/* Evidence Tab Content */}
+      {/* ─── Evidence Tab Content ─── */}
       {activeTab === 'evidence' && (
-        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-slate-200 text-sm">Physical & Digital Evidence Items</h3>
-            <button
-              onClick={() => setShowEvidence(true)}
-              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
-            >
-              + Register New Item
-            </button>
-          </div>
-
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <span className="text-xs font-bold text-emerald-400">Encrypted Solid State Drive (SSD 1TB)</span>
-                <p className="text-xs text-slate-400 mt-0.5">Serial #SSD-99482. Extracted from primary command console.</p>
-              </div>
-              <span className="px-2.5 py-1 rounded bg-emerald-950 text-emerald-400 text-xs font-mono border border-emerald-800">
-                ANALYZED
-              </span>
+        <div className="space-y-4">
+          {evidenceList.length === 0 ? (
+            <div className="py-16 text-center bg-white p-8 rounded-2xl border border-slate-200 text-xs text-slate-400">
+              No evidence items logged for this case. Click "Register Evidence" above to record seized physical or digital devices.
             </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {evidenceList.map((ev) => (
+                <div key={ev.id} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3 hover:border-slate-300 transition-colors shadow-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        {ev.status}
+                      </span>
+                      <h3 className="text-base font-bold text-slate-900 mt-1.5">{ev.type}</h3>
+                      <p className="text-xs text-slate-500 mt-1">{ev.description || 'No additional technical specs recorded.'}</p>
+                    </div>
 
-            {/* Visual Custody Timeline */}
-            <div className="space-y-3 pt-2">
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                Chain of Custody Timeline
-              </div>
+                    <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 shrink-0 border border-emerald-100">
+                      <Box className="w-5 h-5" />
+                    </div>
+                  </div>
 
-              <div className="relative border-l-2 border-slate-800 ml-4 space-y-4 py-2">
-                <div className="ml-6 relative">
-                  <div className="absolute -left-[31px] top-1.5 w-3 h-3 rounded-full bg-indigo-500 ring-4 ring-slate-900"></div>
-                  <div className="text-xs font-semibold text-slate-200">Collected at Crime Scene</div>
-                  <div className="text-[11px] text-slate-400">By Inspector Vikram Singh • 10 Aug 2026, 16:00 UTC</div>
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      Seized: {new Date(ev.collectedAt).toLocaleDateString()}
+                    </span>
+
+                    <button
+                      onClick={() => setTimelineEv({ id: ev.id, type: ev.type })}
+                      className="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-emerald-600" /> Chain of Custody ({ev.custodyEventCount || 1})
+                    </button>
+                  </div>
                 </div>
-
-                <div className="ml-6 relative">
-                  <div className="absolute -left-[31px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-slate-900"></div>
-                  <div className="text-xs font-semibold text-slate-200">Transferred to Central Forensic Science Lab</div>
-                  <div className="text-[11px] text-slate-400">Received by Dr. Ananya Roy • Reason: Forensic image extraction</div>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Case Audit Trail Tab ─── */}
+      {activeTab === 'audit' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+          {auditEvents.length === 0 ? (
+            <div className="py-12 text-center text-xs text-slate-400">No audit events found for this case.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[11px] border-b border-slate-200">
+                  <tr>
+                    <th className="p-4">Timestamp</th>
+                    <th className="p-4">Action</th>
+                    <th className="p-4">Actor</th>
+                    <th className="p-4">Target Type</th>
+                    <th className="p-4">Result</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {auditEvents.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-4 text-slate-400 text-[11px] whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td className="p-4 font-bold text-blue-600">{log.action}</td>
+                      <td className="p-4 font-sans text-slate-800 font-medium">{log.actor?.name}</td>
+                      <td className="p-4 text-slate-500">{log.targetType || 'DOCUMENT'}</td>
+                      <td className="p-4">
+                        <span className="px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                          {log.result}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -335,14 +440,31 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
         />
       )}
 
+      {ledgerDoc && (
+        <BlockchainLedgerModal
+          documentId={ledgerDoc.id}
+          documentName={ledgerDoc.name}
+          onClose={() => setLedgerDoc(null)}
+        />
+      )}
+
       {shareDoc && (
         <ShareModal
           documentId={shareDoc.id}
           documentName={shareDoc.name}
           onClose={() => setShareDoc(null)}
+          onSuccess={fetchCaseDetails}
+        />
+      )}
+
+      {timelineEv && (
+        <EvidenceTimelineModal
+          evidenceId={timelineEv.id}
+          evidenceType={timelineEv.type}
+          onClose={() => setTimelineEv(null)}
+          onCustodyUpdated={fetchCaseDetails}
         />
       )}
     </div>
   );
 };
-

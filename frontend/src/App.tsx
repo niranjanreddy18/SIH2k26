@@ -6,7 +6,9 @@ import { Sidebar } from './components/Sidebar';
 import { DashboardPage } from './pages/DashboardPage';
 import { CasesPage } from './pages/CasesPage';
 import { CaseDetailPage } from './pages/CaseDetailPage';
+import { SharedPage } from './pages/SharedPage';
 import { AuditPage } from './pages/AuditPage';
+import { AdminPage } from './pages/AdminPage';
 import { NewCaseModal } from './components/NewCaseModal';
 
 export const AppContent: React.FC = () => {
@@ -17,8 +19,8 @@ export const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-mono text-xs">
-        Initializing SLIDMS Security Session...
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-mono text-xs">
+        Initializing SLIDMS Cryptographic Security Session...
       </div>
     );
   }
@@ -38,14 +40,17 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col">
       <Header />
 
       <div className="flex flex-1">
-        <Sidebar activeTab={activeTab} setActiveTab={(tab) => {
-          setSelectedCaseId(null);
-          setActiveTab(tab);
-        }} />
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={(tab) => {
+            setSelectedCaseId(null);
+            setActiveTab(tab);
+          }}
+        />
 
         <main className="flex-1 p-6 overflow-y-auto max-w-7xl mx-auto w-full">
           {activeTab === 'dashboard' && (
@@ -69,8 +74,13 @@ export const AppContent: React.FC = () => {
             />
           )}
 
+          {activeTab === 'shared' && (
+            <SharedPage onSelectCase={handleSelectCase} />
+          )}
+
           {activeTab === 'audit' && <AuditPage />}
-          {activeTab === 'shared' && <CasesPage onSelectCase={handleSelectCase} onOpenNewCase={() => setShowNewCaseModal(true)} />}
+
+          {activeTab === 'admin' && <AdminPage />}
         </main>
       </div>
 
@@ -87,4 +97,3 @@ export const AppContent: React.FC = () => {
 export default function App() {
   return <AppContent />;
 }
-

@@ -11,8 +11,11 @@ export default defineConfig({
       '/cases': 'http://localhost:5000',
       '/documents': 'http://localhost:5000',
       '/evidence': 'http://localhost:5000',
-      '/blockchain': 'http://localhost:5000'
+      '/blockchain': 'http://localhost:5000',
+      '/audit': 'http://localhost:5000',
+      '/shares': 'http://localhost:5000',
+      '/admin': 'http://localhost:5000',
+      '/health': 'http://localhost:5000'
     }
   }
 });
-
