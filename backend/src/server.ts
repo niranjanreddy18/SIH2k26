@@ -8,10 +8,10 @@ dotenv.config();
 
 import authRoutes from './routes/auth.routes';
 import casesRoutes from './routes/cases.routes';
-import documentsRoutes from './routes/documents.routes';
-import evidenceRoutes from './routes/evidence.routes';
 import shareRoutes from './routes/share.routes';
 import auditRoutes from './routes/audit.routes';
+import evidenceRoutes from './routes/evidence.routes';
+import documentsRoutes from './routes/documents.routes';
 import blockchainRoutes from './routes/blockchain.routes';
 import adminRoutes from './routes/admin.routes';
 import { errorHandler } from './middlewares/errorHandler';
@@ -31,13 +31,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// API Contract Route Mounting
+// API Contract Route Mounting — specific routes mounted before generic parameterized routes
 app.use('/auth', authRoutes);
 app.use('/cases', casesRoutes);
-app.use('/', documentsRoutes);
-app.use('/', evidenceRoutes);
-app.use('/', shareRoutes);
-app.use('/', auditRoutes);
+app.use('/', shareRoutes);       // /documents/shared-with-me, /documents/:id/share, /shares/:id/revoke
+app.use('/', auditRoutes);       // /documents/:id/audit, /cases/:id/audit, /audit/verify-chain
+app.use('/', evidenceRoutes);    // /cases/:caseId/evidence, /evidence/:id, /evidence/:id/transfer
+app.use('/', documentsRoutes);   // /cases/:caseId/documents, /documents/:id, /documents/:id/download
 app.use('/blockchain', blockchainRoutes);
 app.use('/admin', adminRoutes);
 
@@ -71,7 +71,6 @@ async function startServer() {
     });
   } catch (err: any) {
     console.error('❌ Failed to start SLIDMS backend server:', err.message);
-    // Still start listening in case DB starts shortly or for diagnostics
     app.listen(PORT, () => {
       console.log(`⚠️ SLIDMS Backend started with DB connection warning on port ${PORT}`);
     });

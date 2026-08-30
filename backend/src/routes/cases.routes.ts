@@ -121,7 +121,7 @@ router.get('/:id', authenticateJWT, async (req: AuthRequest, res: Response): Pro
     pool.query(
       `SELECT COUNT(*) FROM audit_events ae
        WHERE ae.target_id = $1
-          OR ae.target_id IN (SELECT id FROM documents WHERE case_id = $1)`, [id, id]),
+          OR ae.target_id IN (SELECT id FROM documents WHERE case_id = $1)`, [id]),
     pool.query(
       `SELECT COUNT(*) FROM shares s
        JOIN document_versions dv ON s.document_version_id = dv.id

@@ -12,7 +12,10 @@ const router = Router();
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } }); // 50 MB
 
 // ─── Helper: fetch document row with current version (joined) ─────────────────
+const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
 async function getDocumentWithVersion(docId: string) {
+  if (!docId || !isUUID(docId)) return null;
   const row = await pool.query(
     `SELECT d.id, d.case_id, d.name, d.type, d.classification,
             d.current_version_id, d.created_at,
