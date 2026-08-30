@@ -13,12 +13,12 @@
 3. [Repository Structure](#-repository-structure)
 4. [Database Schema (PostgreSQL)](#-database-schema-postgresql)
 5. [Backend API Endpoints](#-backend-api-endpoints)
-6. [Frontend Pages & Components](#-frontend-pages--components)
+6. [Frontend Pages &amp; Components](#-frontend-pages--components)
 7. [Application Flow (End-to-End)](#-application-flow-end-to-end)
-8. [Security & Cryptographic Model](#-security--cryptographic-model)
+8. [Security &amp; Cryptographic Model](#-security--cryptographic-model)
 9. [Blockchain Ledger Architecture](#-blockchain-ledger-architecture)
-10. [Current Status & What's Done](#-current-status--whats-done)
-11. [What's Remaining / Next Steps](#-whats-remaining--next-steps)
+10. [Current Status &amp; What&#39;s Done](#-current-status--whats-done)
+11. [What&#39;s Remaining / Next Steps](#-whats-remaining--next-steps)
 12. [How to Run Locally](#-how-to-run-locally)
 13. [Demo Accounts](#-demo-accounts)
 
@@ -39,21 +39,7 @@ SLIDMS is a **tamper-proof, blockchain-anchored document management system** bui
 
 ## 🛠 Tech Stack
 
-| Layer | Technology | Purpose |
-|---|---|---|
-| **Backend Runtime** | Node.js + Express.js | REST API server |
-| **Backend Language** | TypeScript | Type-safe server code |
-| **Database** | PostgreSQL 15+ | Relational persistence with UUID primary keys |
-| **Authentication** | JWT (Access + Refresh tokens) | Stateless auth with token rotation |
-| **Password Hashing** | bcryptjs | Secure password storage |
-| **Cryptographic Hashing** | SHA-256 (Node.js `crypto`) | Document fingerprinting & chain verification |
-| **File Storage** | Local filesystem (`storage_data/`) | Document binary storage (MinIO/S3 ready) |
-| **Frontend Framework** | React 18 + TypeScript | SPA with component architecture |
-| **Frontend Build** | Vite 5 | Fast HMR development server |
-| **Styling** | Tailwind CSS 4.0 | Utility-first CSS framework |
-| **Icons** | Lucide React | Modern icon library |
-| **HTTP Client** | Axios | API communication with interceptors |
-| **Routing** | React Router v7 | Client-side navigation |
+LayerTechnologyPurpose**Backend Runtime**Node.js + Express.jsREST API server**Backend Language**TypeScriptType-safe server code**Database**PostgreSQL 15+Relational persistence with UUID primary keys**Authentication**JWT (Access + Refresh tokens)Stateless auth with token rotation**Password Hashing**bcryptjsSecure password storage**Cryptographic Hashing**SHA-256 (Node.js`crypto`)Document fingerprinting & chain verification**File Storage**Local filesystem (`storage_data/`)Document binary storage (MinIO/S3 ready)**Frontend Framework**React 18 + TypeScriptSPA with component architecture**Frontend Build**Vite 5Fast HMR development server**Styling**Tailwind CSS 4.0Utility-first CSS framework**Icons**Lucide ReactModern icon library**HTTP Client**AxiosAPI communication with interceptors**Routing**React Router v7Client-side navigation
 
 ---
 
@@ -143,34 +129,20 @@ SIH26/
 
 ### Tables (13 total)
 
-| # | Table | Purpose | Key Columns |
-|---|---|---|---|
-| 1 | `users` | Officer accounts | `id (UUID PK)`, `email`, `password_hash`, `role (ENUM)`, `department`, `failed_login_attempts`, `locked_until` |
-| 2 | `cases` | Investigation case files | `id`, `fir_number`, `title`, `description`, `crime_type`, `status (ENUM)`, `classification (ENUM)`, `created_by → users` |
-| 3 | `case_assignments` | Many-to-many: users ↔ cases | `case_id → cases`, `user_id → users`, UNIQUE constraint |
-| 4 | `documents` | Logical document entries per case | `id`, `case_id → cases`, `name`, `type (ENUM)`, `classification`, `current_version_id → document_versions` |
-| 5 | `document_versions` | Immutable version snapshots | `id`, `document_id → documents`, `version_no`, `hash (SHA-256, CHAR 64)`, `storage_key`, `file_size`, `status (ENUM)` |
-| 6 | `approvals` | Approval / rejection decisions | `document_version_id → document_versions`, `reviewer_id → users`, `decision (ENUM)` |
-| 7 | `signatures` | Digital signature records | `document_version_id → document_versions`, `signer_id → users`, `hash`, `reference` |
-| 8 | `evidence` | Physical/digital evidence items | `id`, `case_id → cases`, `type`, `status (ENUM)`, `collected_by → users`, `collected_at` |
-| 9 | `evidence_custody_events` | Chain-of-custody transfer log | `evidence_id → evidence`, `from_user_id`, `to_user_id`, `action`, `reason`, `hash (SHA-256)` |
-| 10 | `audit_events` | Hash-chained audit trail | `actor_id → users`, `action`, `target_type`, `target_id`, `prev_event_hash`, `event_hash` |
-| 11 | `shares` | Time-bounded document access grants | `document_version_id`, `recipient_id`, `can_view`, `can_download`, `expires_at`, `revoked_at` |
-| 12 | `blockchain_records` | Permissioned ledger transactions | `ref_type`, `ref_id`, `action`, `hash`, `prev_hash`, `tx_reference` |
-| 13 | `refresh_tokens` | JWT refresh token rotation | `user_id`, `token_hash`, `revoked_at`, `expires_at` |
+* [ ] #TablePurposeKey Columns1`users`Officer accounts`id (UUID PK)`, `email`, `password_hash`, `role (ENUM)`, `department`, `failed_login_attempts`, `locked_until`2`cases`Investigation case files`id`, `fir_number`, `title`, `description`, `crime_type`, `status (ENUM)`, `classification (ENUM)`, `created_by → users`3`case_assignments`Many-to-many: users ↔ cases`case_id → cases`, `user_id → users`, UNIQUE constraint4`documents`Logical document entries per case`id`, `case_id → cases`, `name`, `type (ENUM)`, `classification`, `current_version_id → document_versions`5`document_versions`Immutable version snapshots`id`, `document_id → documents`, `version_no`, `hash (SHA-256, CHAR 64)`, `storage_key`, `file_size`, `status (ENUM)`6`approvals`Approval / rejection decisions`document_version_id → document_versions`, `reviewer_id → users`, `decision (ENUM)`7`signatures`Digital signature records`document_version_id → document_versions`, `signer_id → users`, `hash`, `reference`8`evidence`Physical/digital evidence items`id`, `case_id → cases`, `type`, `status (ENUM)`, `collected_by → users`, `collected_at`9`evidence_custody_events`Chain-of-custody transfer log`evidence_id → evidence`, `from_user_id`, `to_user_id`, `action`, `reason`, `hash (SHA-256)`10`audit_events`Hash-chained audit trail`actor_id → users`, `action`, `target_type`, `target_id`, `prev_event_hash`, `event_hash`11`shares`Time-bounded document access grants`document_version_id`, `recipient_id`, `can_view`, `can_download`, `expires_at`, `revoked_at`12`blockchain_records`Permissioned ledger transactions`ref_type`, `ref_id`, `action`, `hash`, `prev_hash`, `tx_reference`13`refresh_tokens`JWT refresh token rotation`user_id`, `token_hash`, `revoked_at`, `expires_at`
 
 ### ENUMs (8 total)
 
-| ENUM Type | Values |
-|---|---|
-| `user_role` | INVESTIGATOR, SENIOR_OFFICER, FORENSIC_OFFICER, ADMIN |
-| `case_status` | OPEN, UNDER_INVESTIGATION, UNDER_REVIEW, CHARGESHEET_PREPARED, COURT_SUBMITTED, CLOSED, ARCHIVED |
-| `classification_tier` | PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_CONFIDENTIAL |
-| `document_type` | FIR, COMPLAINT, WITNESS_STATEMENT, INVESTIGATION_REPORT, FORENSIC_REPORT, MEDICAL_REPORT, SEIZURE_MEMO, ARREST_MEMO, CHARGE_SHEET, COURT_FILING, COURT_ORDER, LEGAL_NOTICE, JUDGMENT, EVIDENCE, OTHER |
-| `version_status` | DRAFT, SUBMITTED, UNDER_REVIEW, REJECTED, APPROVED, SIGNED, LOCKED, ARCHIVED |
-| `approval_decision` | APPROVED, REJECTED |
-| `evidence_status` | REGISTERED, COLLECTED, UPLOADED, STORED, TRANSFERRED, RECEIVED, ANALYZED, REPORT_GENERATED, SUBMITTED, ARCHIVED |
-| `audit_result` | SUCCESS, FAILURE |
+| ENUM Type               | Values                                                                                                                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_role`           | INVESTIGATOR, SENIOR_OFFICER, FORENSIC_OFFICER, ADMIN                                                                                                                                                 |
+| `case_status`         | OPEN, UNDER_INVESTIGATION, UNDER_REVIEW, CHARGESHEET_PREPARED, COURT_SUBMITTED, CLOSED, ARCHIVED                                                                                                      |
+| `classification_tier` | PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_CONFIDENTIAL                                                                                                                                                   |
+| `document_type`       | FIR, COMPLAINT, WITNESS_STATEMENT, INVESTIGATION_REPORT, FORENSIC_REPORT, MEDICAL_REPORT, SEIZURE_MEMO, ARREST_MEMO, CHARGE_SHEET, COURT_FILING, COURT_ORDER, LEGAL_NOTICE, JUDGMENT, EVIDENCE, OTHER |
+| `version_status`      | DRAFT, SUBMITTED, UNDER_REVIEW, REJECTED, APPROVED, SIGNED, LOCKED, ARCHIVED                                                                                                                          |
+| `approval_decision`   | APPROVED, REJECTED                                                                                                                                                                                    |
+| `evidence_status`     | REGISTERED, COLLECTED, UPLOADED, STORED, TRANSFERRED, RECEIVED, ANALYZED, REPORT_GENERATED, SUBMITTED, ARCHIVED                                                                                       |
+| `audit_result`        | SUCCESS, FAILURE                                                                                                                                                                                      |
 
 ### Database Indexes
 
@@ -189,83 +161,83 @@ SIH26/
 
 ### Authentication (`/auth`)
 
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/auth/login` | Login with email/password. Returns JWT access + refresh tokens. Implements brute-force lockout (5 attempts / 15 min). | No |
-| `POST` | `/auth/refresh` | Rotate refresh token. Old token is revoked. | No (cookie) |
-| `POST` | `/auth/logout` | Revoke current refresh token. | Yes |
-| `GET` | `/auth/me` | Get current user profile from JWT. | Yes |
+| Method   | Endpoint          | Description                                                                                                           | Auth Required |
+| -------- | ----------------- | --------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `POST` | `/auth/login`   | Login with email/password. Returns JWT access + refresh tokens. Implements brute-force lockout (5 attempts / 15 min). | No            |
+| `POST` | `/auth/refresh` | Rotate refresh token. Old token is revoked.                                                                           | No (cookie)   |
+| `POST` | `/auth/logout`  | Revoke current refresh token.                                                                                         | Yes           |
+| `GET`  | `/auth/me`      | Get current user profile from JWT.                                                                                    | Yes           |
 
 ### Cases (`/cases`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/cases` | List all cases (paginated, search by `?q=`, filter by `?status=`) |
-| `POST` | `/cases` | Create a new case file (FIR number, title, classification) |
-| `GET` | `/cases/:id` | Case detail with document count, evidence count, pending approvals, audit count, active shares |
-| `PATCH` | `/cases/:id` | Update case status (workflow transitions) |
+| Method    | Endpoint       | Description                                                                                    |
+| --------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `GET`   | `/cases`     | List all cases (paginated, search by`?q=`, filter by `?status=`)                           |
+| `POST`  | `/cases`     | Create a new case file (FIR number, title, classification)                                     |
+| `GET`   | `/cases/:id` | Case detail with document count, evidence count, pending approvals, audit count, active shares |
+| `PATCH` | `/cases/:id` | Update case status (workflow transitions)                                                      |
 
 ### Documents (`/cases/:caseId/documents`, `/documents`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/cases/:caseId/documents` | List documents for a case (paginated) |
-| `POST` | `/cases/:caseId/documents` | Upload new document (multipart/form-data). Auto-generates SHA-256 hash. |
-| `GET` | `/documents/:id` | Document detail with version history and blockchain reference |
-| `GET` | `/documents/:id/download` | Download document binary (streams file from storage) |
-| `POST` | `/documents/:id/new-version` | Upload a new version (increments version_no, new SHA-256 hash) |
-| `POST` | `/documents/:id/workflow` | Transition workflow status: DRAFT → SUBMITTED → APPROVED → SIGNED → LOCKED |
-| `POST` | `/documents/:id/verify` | Re-compute SHA-256 from live storage file and compare against registered hash |
-| `POST` | `/documents/:id/tamper-demo` | Demo: Corrupt the physical file on disk to simulate out-of-band tampering |
+| Method   | Endpoint                       | Description                                                                    |
+| -------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `GET`  | `/cases/:caseId/documents`   | List documents for a case (paginated)                                          |
+| `POST` | `/cases/:caseId/documents`   | Upload new document (multipart/form-data). Auto-generates SHA-256 hash.        |
+| `GET`  | `/documents/:id`             | Document detail with version history and blockchain reference                  |
+| `GET`  | `/documents/:id/download`    | Download document binary (streams file from storage)                           |
+| `POST` | `/documents/:id/new-version` | Upload a new version (increments version_no, new SHA-256 hash)                 |
+| `POST` | `/documents/:id/workflow`    | Transition workflow status: DRAFT → SUBMITTED → APPROVED → SIGNED → LOCKED |
+| `POST` | `/documents/:id/verify`      | Re-compute SHA-256 from live storage file and compare against registered hash  |
+| `POST` | `/documents/:id/tamper-demo` | Demo: Corrupt the physical file on disk to simulate out-of-band tampering      |
 
 ### Evidence (`/cases/:caseId/evidence`, `/evidence`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/cases/:caseId/evidence` | List evidence items for a case |
+| Method   | Endpoint                    | Description                                                          |
+| -------- | --------------------------- | -------------------------------------------------------------------- |
+| `GET`  | `/cases/:caseId/evidence` | List evidence items for a case                                       |
 | `POST` | `/cases/:caseId/evidence` | Register new evidence item (type, description, collection timestamp) |
-| `GET` | `/evidence/:id` | Evidence detail with current custodian |
-| `GET` | `/evidence/:id/custody` | Full custody event timeline (chain of custody) |
-| `POST` | `/evidence/:id/transfer` | Transfer custody to another officer (creates hashed custody event) |
+| `GET`  | `/evidence/:id`           | Evidence detail with current custodian                               |
+| `GET`  | `/evidence/:id/custody`   | Full custody event timeline (chain of custody)                       |
+| `POST` | `/evidence/:id/transfer`  | Transfer custody to another officer (creates hashed custody event)   |
 
 ### Sharing (`/documents`, `/shares`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/documents/:id/share` | Grant time-bounded access to another officer |
-| `GET` | `/documents/shared-with-me` | List documents shared with the current user |
-| `POST` | `/shares/:id/revoke` | Revoke an active share (only creator or admin) |
+| Method   | Endpoint                      | Description                                    |
+| -------- | ----------------------------- | ---------------------------------------------- |
+| `POST` | `/documents/:id/share`      | Grant time-bounded access to another officer   |
+| `GET`  | `/documents/shared-with-me` | List documents shared with the current user    |
+| `POST` | `/shares/:id/revoke`        | Revoke an active share (only creator or admin) |
 
 ### Blockchain Ledger (`/blockchain`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/blockchain/register` | Manually anchor a document hash to the ledger |
-| `GET` | `/blockchain/records/:documentId` | Fetch all ledger transactions for a document |
-| `POST` | `/blockchain/verify/:documentId` | Verify live storage hash against ledger record |
+| Method   | Endpoint                            | Description                                    |
+| -------- | ----------------------------------- | ---------------------------------------------- |
+| `POST` | `/blockchain/register`            | Manually anchor a document hash to the ledger  |
+| `GET`  | `/blockchain/records/:documentId` | Fetch all ledger transactions for a document   |
+| `POST` | `/blockchain/verify/:documentId`  | Verify live storage hash against ledger record |
 
 ### Audit Trail (`/audit`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/documents/:id/audit` | Audit events for a specific document |
-| `GET` | `/cases/:id/audit` | Audit events for a case and its documents |
-| `GET` | `/audit/verify-chain` | Full hash chain verification (recalculates all hashes from genesis) |
+| Method  | Endpoint                 | Description                                                         |
+| ------- | ------------------------ | ------------------------------------------------------------------- |
+| `GET` | `/documents/:id/audit` | Audit events for a specific document                                |
+| `GET` | `/cases/:id/audit`     | Audit events for a case and its documents                           |
+| `GET` | `/audit/verify-chain`  | Full hash chain verification (recalculates all hashes from genesis) |
 
 ### Admin (`/admin`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/admin/users` | List all user accounts |
-| `POST` | `/admin/users` | Create a new user account |
-| `PATCH` | `/admin/users/:id/role` | Change a user's role |
+| Method    | Endpoint                    | Description                                     |
+| --------- | --------------------------- | ----------------------------------------------- |
+| `GET`   | `/admin/users`            | List all user accounts                          |
+| `POST`  | `/admin/users`            | Create a new user account                       |
+| `PATCH` | `/admin/users/:id/role`   | Change a user's role                            |
 | `PATCH` | `/admin/users/:id/unlock` | Unlock a locked account (reset failed attempts) |
-| `GET` | `/admin/audit` | Master audit log (all events, paginated) |
+| `GET`   | `/admin/audit`            | Master audit log (all events, paginated)        |
 
 ### Health
 
-| Method | Endpoint | Description |
-|---|---|---|
+| Method  | Endpoint    | Description                                         |
+| ------- | ----------- | --------------------------------------------------- |
 | `GET` | `/health` | Server health check (returns OK + persistence type) |
 
 ---
@@ -274,30 +246,30 @@ SIH26/
 
 ### Pages (7)
 
-| Page | Route | Description |
-|---|---|---|
-| **LoginPage** | `/login` | Email + password login with 4 **1-click persona demo buttons** (Investigator, Senior Officer, Forensic Officer, Admin). |
-| **DashboardPage** | `/` | Overview metrics: Total Cases, Open Investigations, Total Documents, Pending Approvals. Recent cases table. |
-| **CasesPage** | `/cases` | Full case repository table with live search (`?q=`) and status filter. Create new case button. |
+| Page                     | Route          | Description                                                                                                                                                                                                       |
+| ------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LoginPage**      | `/login`     | Email + password login with 4**1-click persona demo buttons** (Investigator, Senior Officer, Forensic Officer, Admin).                                                                                      |
+| **DashboardPage**  | `/`          | Overview metrics: Total Cases, Open Investigations, Total Documents, Pending Approvals. Recent cases table.                                                                                                       |
+| **CasesPage**      | `/cases`     | Full case repository table with live search (`?q=`) and status filter. Create new case button.                                                                                                                  |
 | **CaseDetailPage** | `/cases/:id` | Detailed case view: stats cards, documents table (download, workflow actions, verify, share, view blockchain ledger), evidence table (view custody timeline, register new evidence). All modals launch from here. |
-| **SharedPage** | `/shared` | Documents shared with the current user. Download and revoke actions. |
-| **AuditPage** | `/audit` | Paginated audit event log. "Verify Hash Chain" button that checks the entire chain integrity. |
-| **AdminPage** | `/admin` | User directory table: create users, change roles, unlock accounts. Master audit log tab. *(Only visible to ADMIN role)* |
+| **SharedPage**     | `/shared`    | Documents shared with the current user. Download and revoke actions.                                                                                                                                              |
+| **AuditPage**      | `/audit`     | Paginated audit event log. "Verify Hash Chain" button that checks the entire chain integrity.                                                                                                                     |
+| **AdminPage**      | `/admin`     | User directory table: create users, change roles, unlock accounts. Master audit log tab.*(Only visible to ADMIN role)*                                                                                          |
 
 ### Components (10)
 
-| Component | Purpose |
-|---|---|
-| `Header` | Top bar with SLIDMS branding, user name, role badge, logout button |
-| `Sidebar` | Left navigation: Dashboard, Cases, Shared Documents, Audit Trail, Administration (admin only) |
-| `StatusBadge` | Colored pill badges for document status, classification tier, and verification result |
-| `NewCaseModal` | Form: FIR number, title, crime type, classification, description |
-| `DocumentUploadModal` | Upload form: name, type, classification tier, file selector. SHA-256 fingerprinted on upload. |
-| `EvidenceModal` | Register evidence: type/item name, collection details |
-| `EvidenceTimelineModal` | Visual vertical timeline of custody events. Transfer form to hand evidence to another officer. |
-| `BlockchainLedgerModal` | Lists all blockchain ledger transactions for a document. Shows block hash, prev hash, TX reference. Copy hash buttons. |
-| `ShareModal` | Grant time-bounded access: recipient selector, view/download permissions, expiration period (1-30 days) |
-| `VerificationModal` | Runs live SHA-256 re-computation against stored hash. Shows VERIFIED/TAMPERED status. Includes **"Demo Tamper Climax"** button to corrupt the file on disk and re-verify. |
+| Component                 | Purpose                                                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Header`                | Top bar with SLIDMS branding, user name, role badge, logout button                                                                                                             |
+| `Sidebar`               | Left navigation: Dashboard, Cases, Shared Documents, Audit Trail, Administration (admin only)                                                                                  |
+| `StatusBadge`           | Colored pill badges for document status, classification tier, and verification result                                                                                          |
+| `NewCaseModal`          | Form: FIR number, title, crime type, classification, description                                                                                                               |
+| `DocumentUploadModal`   | Upload form: name, type, classification tier, file selector. SHA-256 fingerprinted on upload.                                                                                  |
+| `EvidenceModal`         | Register evidence: type/item name, collection details                                                                                                                          |
+| `EvidenceTimelineModal` | Visual vertical timeline of custody events. Transfer form to hand evidence to another officer.                                                                                 |
+| `BlockchainLedgerModal` | Lists all blockchain ledger transactions for a document. Shows block hash, prev hash, TX reference. Copy hash buttons.                                                         |
+| `ShareModal`            | Grant time-bounded access: recipient selector, view/download permissions, expiration period (1-30 days)                                                                        |
+| `VerificationModal`     | Runs live SHA-256 re-computation against stored hash. Shows VERIFIED/TAMPERED status. Includes**"Demo Tamper Climax"** button to corrupt the file on disk and re-verify. |
 
 ---
 
@@ -418,18 +390,18 @@ GET /audit/verify-chain
 
 ## 🔒 Security & Cryptographic Model
 
-| Feature | Implementation |
-|---|---|
-| **Password Storage** | bcryptjs with salt rounds = 12 |
-| **JWT Authentication** | Access token (15min) + Refresh token (7d, HTTP-only cookie) |
-| **Token Rotation** | Refresh tokens stored as SHA-256 hashes in DB. Old tokens revoked on refresh. |
-| **Brute-Force Protection** | 5 failed login attempts → account locked for 15 minutes |
-| **Document Integrity** | Every file version hashed with SHA-256 at upload. Hash stored in `document_versions.hash`. |
-| **Audit Chain Integrity** | Every audit event includes `prev_event_hash` → `event_hash`. Full chain verification via `/audit/verify-chain`. |
-| **Custody Chain Integrity** | Evidence handover events include a SHA-256 hash binding evidence ID + actors + timestamp. |
-| **Classification Tiers** | PUBLIC < INTERNAL < CONFIDENTIAL < HIGHLY_CONFIDENTIAL. Enforced at document & case level. |
-| **Time-Bounded Sharing** | Share grants auto-expire. Can be revoked early by creator or admin. |
-| **Role-Based Access** | 4 roles: INVESTIGATOR, SENIOR_OFFICER, FORENSIC_OFFICER, ADMIN. Admin panel restricted to ADMIN role. |
+| Feature                           | Implementation                                                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Password Storage**        | bcryptjs with salt rounds = 12                                                                                        |
+| **JWT Authentication**      | Access token (15min) + Refresh token (7d, HTTP-only cookie)                                                           |
+| **Token Rotation**          | Refresh tokens stored as SHA-256 hashes in DB. Old tokens revoked on refresh.                                         |
+| **Brute-Force Protection**  | 5 failed login attempts → account locked for 15 minutes                                                              |
+| **Document Integrity**      | Every file version hashed with SHA-256 at upload. Hash stored in`document_versions.hash`.                           |
+| **Audit Chain Integrity**   | Every audit event includes`prev_event_hash` → `event_hash`. Full chain verification via `/audit/verify-chain`. |
+| **Custody Chain Integrity** | Evidence handover events include a SHA-256 hash binding evidence ID + actors + timestamp.                             |
+| **Classification Tiers**    | PUBLIC < INTERNAL < CONFIDENTIAL < HIGHLY_CONFIDENTIAL. Enforced at document & case level.                            |
+| **Time-Bounded Sharing**    | Share grants auto-expire. Can be revoked early by creator or admin.                                                   |
+| **Role-Based Access**       | 4 roles: INVESTIGATOR, SENIOR_OFFICER, FORENSIC_OFFICER, ADMIN. Admin panel restricted to ADMIN role.                 |
 
 ---
 
@@ -467,53 +439,53 @@ Block N:            prevHash = Block (N-1)'s hash
 
 ### Backend — 100% MVP Complete ✅
 
-- [x] PostgreSQL database with 13 tables, 8 ENUMs, 8 indexes
-- [x] Idempotent schema migrations (`src/db/migrate.ts`)
-- [x] Demo data seeder with 4 officers, 2 cases, documents, evidence (`src/db/seed.ts`)
-- [x] JWT authentication with access + refresh token rotation
-- [x] Brute-force account lockout (5 attempts / 15 min)
-- [x] Full CRUD for cases (create, list, detail with stats, status update)
-- [x] Document upload with SHA-256 fingerprinting
-- [x] Document versioning (new versions maintain history)
-- [x] Document workflow state machine (DRAFT → SUBMITTED → APPROVED → SIGNED → LOCKED)
-- [x] Document download (file streaming from storage)
-- [x] Cryptographic integrity verification (re-hash live file vs registered hash)
-- [x] Tamper simulation demo endpoint
-- [x] Evidence registration with chain of custody tracking
-- [x] Evidence custody transfer with hashed events
-- [x] Time-bounded document sharing with view/download permissions
-- [x] Share revocation
-- [x] Permissioned blockchain ledger (hash-chained records with TX references)
-- [x] Blockchain verification endpoint
-- [x] Hash-chained audit trail (Merkle-style, every event links to previous)
-- [x] Full audit chain verification endpoint
-- [x] Admin user management (create, role change, unlock)
-- [x] Admin master audit log
-- [x] Health check endpoint
-- [x] Centralized error handler
+- [X] PostgreSQL database with 13 tables, 8 ENUMs, 8 indexes
+- [X] Idempotent schema migrations (`src/db/migrate.ts`)
+- [X] Demo data seeder with 4 officers, 2 cases, documents, evidence (`src/db/seed.ts`)
+- [X] JWT authentication with access + refresh token rotation
+- [X] Brute-force account lockout (5 attempts / 15 min)
+- [X] Full CRUD for cases (create, list, detail with stats, status update)
+- [X] Document upload with SHA-256 fingerprinting
+- [X] Document versioning (new versions maintain history)
+- [X] Document workflow state machine (DRAFT → SUBMITTED → APPROVED → SIGNED → LOCKED)
+- [X] Document download (file streaming from storage)
+- [X] Cryptographic integrity verification (re-hash live file vs registered hash)
+- [X] Tamper simulation demo endpoint
+- [X] Evidence registration with chain of custody tracking
+- [X] Evidence custody transfer with hashed events
+- [X] Time-bounded document sharing with view/download permissions
+- [X] Share revocation
+- [X] Permissioned blockchain ledger (hash-chained records with TX references)
+- [X] Blockchain verification endpoint
+- [X] Hash-chained audit trail (Merkle-style, every event links to previous)
+- [X] Full audit chain verification endpoint
+- [X] Admin user management (create, role change, unlock)
+- [X] Admin master audit log
+- [X] Health check endpoint
+- [X] Centralized error handler
 
 ### Frontend — 100% MVP Complete ✅
 
-- [x] Login page with 1-click persona demo buttons
-- [x] Auth context with JWT token management & auto-refresh
-- [x] Dashboard with live metrics cards & recent cases table
-- [x] Cases repository with search & status filter
-- [x] Case detail page with documents table, evidence table, stats
-- [x] Document upload modal with type & classification selection
-- [x] Document download (direct file download from backend)
-- [x] Document workflow transitions (Submit, Approve, Sign, Lock)
-- [x] Cryptographic verification modal with VERIFIED/TAMPERED display
-- [x] Tamper demo button ("Demo Tamper Climax")
-- [x] Evidence registration modal
-- [x] Evidence chain of custody timeline modal with transfer form
-- [x] Blockchain ledger transaction explorer modal
-- [x] Document sharing modal (recipient, permissions, expiry)
-- [x] Shared documents page (shared-with-me) with revoke
-- [x] Audit trail page with hash chain verification badge
-- [x] Admin page (user directory, role management, account unlock, master audit)
-- [x] Role-based sidebar navigation (Admin tab hidden for non-admin users)
-- [x] Government-grade light color palette theme
-- [x] Responsive layout with clean typography
+- [X] Login page with 1-click persona demo buttons
+- [X] Auth context with JWT token management & auto-refresh
+- [X] Dashboard with live metrics cards & recent cases table
+- [X] Cases repository with search & status filter
+- [X] Case detail page with documents table, evidence table, stats
+- [X] Document upload modal with type & classification selection
+- [X] Document download (direct file download from backend)
+- [X] Document workflow transitions (Submit, Approve, Sign, Lock)
+- [X] Cryptographic verification modal with VERIFIED/TAMPERED display
+- [X] Tamper demo button ("Demo Tamper Climax")
+- [X] Evidence registration modal
+- [X] Evidence chain of custody timeline modal with transfer form
+- [X] Blockchain ledger transaction explorer modal
+- [X] Document sharing modal (recipient, permissions, expiry)
+- [X] Shared documents page (shared-with-me) with revoke
+- [X] Audit trail page with hash chain verification badge
+- [X] Admin page (user directory, role management, account unlock, master audit)
+- [X] Role-based sidebar navigation (Admin tab hidden for non-admin users)
+- [X] Government-grade light color palette theme
+- [X] Responsive layout with clean typography
 
 ---
 
@@ -593,12 +565,12 @@ Navigate to **http://localhost:5173** and use any demo account to log in.
 
 ## 👤 Demo Accounts
 
-| Role | Name | Email | Password |
-|---|---|---|---|
-| **Investigator** | Inspector Vikram Singh | `investigator@police.gov.in` | `Password123!` |
-| **Senior Officer** | ACP Rajeshwar Sharma | `senior@police.gov.in` | `Password123!` |
-| **Forensic Officer** | Dr. Ananya Roy | `forensic@lab.gov.in` | `Password123!` |
-| **System Admin** | Admin Desk Officer | `admin@slidms.gov.in` | `Password123!` |
+| Role                       | Name                   | Email                          | Password         |
+| -------------------------- | ---------------------- | ------------------------------ | ---------------- |
+| **Investigator**     | Inspector Vikram Singh | `investigator@police.gov.in` | `Password123!` |
+| **Senior Officer**   | ACP Rajeshwar Sharma   | `senior@police.gov.in`       | `Password123!` |
+| **Forensic Officer** | Dr. Ananya Roy         | `forensic@lab.gov.in`        | `Password123!` |
+| **System Admin**     | Admin Desk Officer     | `admin@slidms.gov.in`        | `Password123!` |
 
 > **Tip**: The Login page has **1-click persona demo buttons** — click any persona card to auto-fill credentials and log in instantly.
 

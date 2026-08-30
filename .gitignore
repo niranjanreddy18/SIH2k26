@@ -1,33 +1,41 @@
-# Dependencies
+# ─── Dependencies ────────────────────────────────────────────────────────────
 node_modules/
 */node_modules/
+
+# ─── Package lock backups ────────────────────────────────────────────────────
 package-lock.json.backup
 
-# Production Builds
+# ─── Production Builds ───────────────────────────────────────────────────────
 dist/
 */dist/
 build/
 */build/
 out/
+*/out/
 .next/
+*/.next/
 
-# Environment variables & secrets
+# ─── TypeScript ──────────────────────────────────────────────────────────────
+*.tsbuildinfo
+*/*.tsbuildinfo
+
+# ─── Environment variables & secrets ─────────────────────────────────────────
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+!**/.env.example
 backend/.env
 frontend/.env
-!*.env.example
 
-# Local storage and file uploads
+# ─── Local storage & file uploads ────────────────────────────────────────────
 storage_data/
 */storage_data/
 uploads/
 */uploads/
+temp/
+*/temp/
 
-# Logs
+# ─── Logs ────────────────────────────────────────────────────────────────────
 logs/
 *.log
 npm-debug.log*
@@ -36,14 +44,21 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Runtime data & temp files
+# ─── Runtime data & temp files ───────────────────────────────────────────────
 *.pid
 *.seed
 *.pid.lock
 .pnpm-store
 .turbo
+.cache/
+*/.cache/
 
-# IDE & Editor files
+# ─── Test & Coverage ─────────────────────────────────────────────────────────
+coverage/
+*/coverage/
+.nyc_output/
+
+# ─── IDE & Editor ────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.suo
@@ -52,7 +67,7 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# OS generated files
+# ─── OS generated files ──────────────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
@@ -60,7 +75,10 @@ lerna-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Agent & Brain temp artifacts
-.system_generated/
+# ─── Agent & Brain temp artifacts ────────────────────────────────────────────
+.gemini/
+.agents/plugins/
 scratch/
+.system_generated/
