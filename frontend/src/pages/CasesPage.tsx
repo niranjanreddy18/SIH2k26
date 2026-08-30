@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, FolderOpen, FileText, FlaskConical, Scale, AlertTriangle } from 'lucide-react';
+import { Search, Plus, FolderOpen, FileText, FlaskConical, Scale, AlertTriangle, Users } from 'lucide-react';
 import api from '../services/api';
 import { Case } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -45,6 +45,88 @@ export const CasesPage: React.FC<Props> = ({ onSelectCase, onOpenNewCase }) => {
     c.firNumber.toLowerCase().includes(search.toLowerCase()) ||
     c.title.toLowerCase().includes(search.toLowerCase()) ||
     (c.crimeType || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Split by relationship to the viewer, not just a flat list — "shared with
+  // you" (assigned by someone else) reads very differently than "your case."
+  const myCases = filtered.filter(c => c.isOwner);
+  const sharedCases = filtered.filter(c => !c.isOwner && c.isAssigned);
+  const otherCases = filtered.filter(c => !c.isOwner && !c.isAssigned);
+
+  const renderCaseCard = (c: Case, i: number) => {
+    const isHighlyConf = c.classification === 'HIGHLY_CONFIDENTIAL';
+    return (
+      <div
+        key={c.id}
+        className={`animate-fade-in-up ${isHighlyConf ? 'animate-pulse-border-red' : ''}`}
+        onClick={() => onSelectCase(c.id)}
+        style={{
+          background: 'var(--bg-surface)',
+          border: `1px solid ${isHighlyConf ? '#ef4444' : 'var(--border)'}`,
+          borderLeft: `4px solid ${isHighlyConf ? '#ef4444' : 'rgba(59,130,246,0.3)'}`,
+          borderRadius: '12px', padding: '18px',
+          cursor: 'pointer', transition: 'all 200ms',
+          animationDelay: `${i * 40}ms`,
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+          (e.currentTarget as HTMLDivElement).style.boxShadow = isHighlyConf
+            ? '0 8px 24px rgba(239,68,68,0.15)' : '0 8px 24px rgba(59,130,246,0.12)';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+          (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+        }}
+      >
+        {/* Top row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#60a5fa', fontFamily: 'JetBrains Mono, monospace' }}>
+            {c.firNumber}
+          </span>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <StatusBadge type="status" value={c.status} />
+            <StatusBadge type="classification" value={c.classification} />
+          </div>
+        </div>
+
+        {/* Title */}
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px', lineHeight: 1.3 }}>
+          {c.title}
+        </div>
+
+        {c.crimeType && (
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+            {c.crimeType}
+          </div>
+        )}
+
+        {/* Stats */}
+        <div style={{
+          display: 'flex', gap: '12px',
+          paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)',
+          fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+        }}>
+          <span>📄 {c.documentCount || 0} docs</span>
+          <span>🔬 {c.evidenceCount || 0} evidence</span>
+          {(c.pendingApprovals || 0) > 0 && (
+            <span style={{ color: '#f59e0b', fontWeight: 700 }}>⏳ {c.pendingApprovals} pending</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const SectionHeader: React.FC<{ icon: React.ReactNode; label: string; count: number }> = ({ icon, label, count }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+      {icon}
+      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        {label}
+      </span>
+      <span style={{
+        fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace',
+        background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '9999px', padding: '1px 8px',
+      }}>{count}</span>
+    </div>
   );
 
   const inputStyle: React.CSSProperties = {
@@ -175,69 +257,33 @@ export const CasesPage: React.FC<Props> = ({ onSelectCase, onOpenNewCase }) => {
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
-          {filtered.map((c, i) => {
-            const isHighlyConf = c.classification === 'HIGHLY_CONFIDENTIAL';
-            return (
-              <div
-                key={c.id}
-                className={`animate-fade-in-up ${isHighlyConf ? 'animate-pulse-border-red' : ''}`}
-                onClick={() => onSelectCase(c.id)}
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: `1px solid ${isHighlyConf ? '#ef4444' : 'var(--border)'}`,
-                  borderLeft: `4px solid ${isHighlyConf ? '#ef4444' : 'rgba(59,130,246,0.3)'}`,
-                  borderRadius: '12px', padding: '18px',
-                  cursor: 'pointer', transition: 'all 200ms',
-                  animationDelay: `${i * 40}ms`,
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = isHighlyConf
-                    ? '0 8px 24px rgba(239,68,68,0.15)' : '0 8px 24px rgba(59,130,246,0.12)';
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-                  (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
-                }}
-              >
-                {/* Top row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#60a5fa', fontFamily: 'JetBrains Mono, monospace' }}>
-                    {c.firNumber}
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <StatusBadge type="status" value={c.status} />
-                    <StatusBadge type="classification" value={c.classification} />
-                  </div>
-                </div>
-
-                {/* Title */}
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px', lineHeight: 1.3 }}>
-                  {c.title}
-                </div>
-
-                {c.crimeType && (
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px' }}>
-                    {c.crimeType}
-                  </div>
-                )}
-
-                {/* Stats */}
-                <div style={{
-                  display: 'flex', gap: '12px',
-                  paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)',
-                  fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
-                }}>
-                  <span>📄 {c.documentCount || 0} docs</span>
-                  <span>🔬 {c.evidenceCount || 0} evidence</span>
-                  {(c.pendingApprovals || 0) > 0 && (
-                    <span style={{ color: '#f59e0b', fontWeight: 700 }}>⏳ {c.pendingApprovals} pending</span>
-                  )}
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {myCases.length > 0 && (
+            <div>
+              <SectionHeader icon={<FolderOpen size={13} color="#60a5fa" />} label="My Cases" count={myCases.length} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+                {myCases.map((c, i) => renderCaseCard(c, i))}
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {sharedCases.length > 0 && (
+            <div>
+              <SectionHeader icon={<Users size={13} color="#a78bfa" />} label="Shared With You" count={sharedCases.length} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+                {sharedCases.map((c, i) => renderCaseCard(c, i))}
+              </div>
+            </div>
+          )}
+
+          {otherCases.length > 0 && (
+            <div>
+              <SectionHeader icon={<FolderOpen size={13} color="var(--text-muted)" />} label="Other Cases (Admin Access)" count={otherCases.length} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+                {otherCases.map((c, i) => renderCaseCard(c, i))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

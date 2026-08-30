@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft, FileText, Upload, ShieldCheck, Share2,
   Box, CheckCircle2, XCircle, FileSignature, Lock,
-  RefreshCw, History, Eye, Download, Link2, Clock, Send, Layout, Users, Loader, AlertTriangle
+  RefreshCw, History, Eye, Download, Link2, Clock, Send, Layout, Users, Loader, AlertTriangle, Layers
 } from 'lucide-react';
 import api from '../services/api';
-import { Case, Document, Evidence, AuditEvent, CaseShareItem } from '../types';
+import { Case, Document, Evidence, AuditEvent, CaseShareItem, CaseAssignment } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +18,9 @@ import { EvidenceTimelineModal } from '../components/EvidenceTimelineModal';
 import { ShareModal } from '../components/ShareModal';
 import { DocumentAuditModal } from '../components/DocumentAuditModal';
 import { PreviewModal } from '../components/PreviewModal';
+import { VersionHistoryModal } from '../components/VersionHistoryModal';
+import { NewVersionModal } from '../components/NewVersionModal';
+import { AddOfficerModal } from '../components/AddOfficerModal';
 
 interface Props {
   caseId: string;
@@ -27,12 +30,12 @@ interface Props {
 type TabId = 'overview' | 'documents' | 'evidence' | 'timeline' | 'audit' | 'access';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'overview',   label: 'Overview',   icon: Layout     },
-  { id: 'documents',  label: 'Documents',  icon: FileText   },
-  { id: 'evidence',   label: 'Evidence',   icon: Box        },
-  { id: 'timeline',   label: 'Timeline',   icon: History    },
-  { id: 'audit',      label: 'Audit',      icon: ShieldCheck},
-  { id: 'access',     label: 'Access',     icon: Users      },
+  { id: 'overview', label: 'Overview', icon: Layout },
+  { id: 'documents', label: 'Documents', icon: FileText },
+  { id: 'evidence', label: 'Evidence', icon: Box },
+  { id: 'timeline', label: 'Timeline', icon: History },
+  { id: 'audit', label: 'Audit', icon: ShieldCheck },
+  { id: 'access', label: 'Access', icon: Users },
 ];
 
 const ACTION_DOT_COLORS: Record<string, string> = {
@@ -49,25 +52,30 @@ const ACTION_DOT_COLORS: Record<string, string> = {
 
 export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
   const { user } = useAuth();
-  const [caseData, setCaseData]       = useState<Case | null>(null);
-  const [documents, setDocuments]     = useState<Document[]>([]);
+  const [caseData, setCaseData] = useState<Case | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [shares, setShares]           = useState<CaseShareItem[]>([]);
-  const [activeTab, setActiveTab]     = useState<TabId>('documents');
-  const [loading, setLoading]         = useState(true);
-  const [loadError, setLoadError]     = useState(false);
-  const [revokingId, setRevokingId]   = useState<string | null>(null);
+  const [shares, setShares] = useState<CaseShareItem[]>([]);
+  const [team, setTeam] = useState<CaseAssignment[]>([]);
+  const [activeTab, setActiveTab] = useState<TabId>('documents');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [removingOfficerId, setRemovingOfficerId] = useState<string | null>(null);
+  const [showAddOfficer, setShowAddOfficer] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
-  const [showUpload, setShowUpload]     = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
-  const [verifyDoc, setVerifyDoc]   = useState<{ id: string; name: string } | null>(null);
-  const [ledgerDoc, setLedgerDoc]   = useState<{ id: string; name: string } | null>(null);
-  const [shareDoc, setShareDoc]     = useState<{ id: string; name: string } | null>(null);
-  const [auditDoc, setAuditDoc]     = useState<{ id: string; name: string } | null>(null);
+  const [verifyDoc, setVerifyDoc] = useState<{ id: string; name: string } | null>(null);
+  const [ledgerDoc, setLedgerDoc] = useState<{ id: string; name: string } | null>(null);
+  const [shareDoc, setShareDoc] = useState<{ id: string; name: string } | null>(null);
+  const [auditDoc, setAuditDoc] = useState<{ id: string; name: string } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<{ id: string; name: string; mimeType?: string } | null>(null);
+  const [historyDoc, setHistoryDoc] = useState<{ id: string; name: string } | null>(null);
+  const [newVersionDoc, setNewVersionDoc] = useState<{ id: string; name: string; versionNo?: number } | null>(null);
   const [timelineEv, setTimelineEv] = useState<{ id: string; type: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -75,19 +83,21 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [caseRes, docRes, evRes, auditRes, sharesRes] = await Promise.allSettled([
+      const [caseRes, docRes, evRes, auditRes, sharesRes, teamRes] = await Promise.allSettled([
         api.get(`/cases/${caseId}`),
         api.get(`/cases/${caseId}/documents`),
         api.get(`/cases/${caseId}/evidence`),
         api.get(`/cases/${caseId}/audit`),
         api.get(`/cases/${caseId}/shares`),
+        api.get(`/cases/${caseId}/assignments`),
       ]);
-      if (caseRes.status  === 'fulfilled' && caseRes.value.data.success)  setCaseData(caseRes.value.data.data);
+      if (caseRes.status === 'fulfilled' && caseRes.value.data.success) setCaseData(caseRes.value.data.data);
       else setLoadError(true);
-      if (docRes.status   === 'fulfilled' && docRes.value.data.success)   setDocuments(docRes.value.data.data.items || []);
-      if (evRes.status    === 'fulfilled' && evRes.value.data.success)    setEvidenceList(evRes.value.data.data.items || []);
+      if (docRes.status === 'fulfilled' && docRes.value.data.success) setDocuments(docRes.value.data.data.items || []);
+      if (evRes.status === 'fulfilled' && evRes.value.data.success) setEvidenceList(evRes.value.data.data.items || []);
       if (auditRes.status === 'fulfilled' && auditRes.value.data.success) setAuditEvents(auditRes.value.data.data.items || []);
       if (sharesRes.status === 'fulfilled' && sharesRes.value.data.success) setShares(sharesRes.value.data.data.items || []);
+      if (teamRes.status === 'fulfilled' && teamRes.value.data.success) setTeam(teamRes.value.data.data || []);
     } catch (err) {
       setLoadError(true);
     } finally {
@@ -120,6 +130,21 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
       toast.error('Revocation failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setRevokingId(null);
+    }
+  };
+
+  const handleRemoveOfficer = async (officerId: string, officerName: string) => {
+    const ok = await confirm({ message: `Remove ${officerName} from this case? They'll lose all access immediately.`, confirmLabel: 'Remove', danger: true });
+    if (!ok) return;
+    setRemovingOfficerId(officerId);
+    try {
+      await api.delete(`/cases/${caseId}/assignments/${officerId}`);
+      toast.success(`${officerName} removed from the case.`);
+      await fetchCaseDetails();
+    } catch (err: any) {
+      toast.error('Failed to remove officer: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setRemovingOfficerId(null);
     }
   };
 
@@ -358,53 +383,64 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
 
                     {/* Action buttons */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      <button style={btnStyle('#10b981','rgba(16,185,129,0.1)','rgba(16,185,129,0.25)')} onClick={() => setVerifyDoc({ id: doc.id, name: doc.name })}>
+                      <button style={btnStyle('#10b981', 'rgba(16,185,129,0.1)', 'rgba(16,185,129,0.25)')} onClick={() => setVerifyDoc({ id: doc.id, name: doc.name })}>
                         <ShieldCheck size={12} /> Verify
                       </button>
-                      <button style={btnStyle('#60a5fa','rgba(59,130,246,0.08)','rgba(59,130,246,0.2)')} onClick={() => setPreviewDoc({ id: doc.id, name: doc.name, mimeType: doc.currentVersion?.mimeType })}>
+                      <button style={btnStyle('#60a5fa', 'rgba(59,130,246,0.08)', 'rgba(59,130,246,0.2)')} onClick={() => setPreviewDoc({ id: doc.id, name: doc.name, mimeType: doc.currentVersion?.mimeType })}>
                         <Eye size={12} /> Preview
                       </button>
-                      <button style={btnStyle('#818cf8','rgba(99,102,241,0.1)','rgba(99,102,241,0.25)')} onClick={() => setLedgerDoc({ id: doc.id, name: doc.name })}>
+                      <button style={btnStyle('#818cf8', 'rgba(99,102,241,0.1)', 'rgba(99,102,241,0.25)')} onClick={() => setLedgerDoc({ id: doc.id, name: doc.name })}>
                         <Link2 size={12} /> Blockchain
                       </button>
-                      <button style={btnStyle('#a78bfa','rgba(139,92,246,0.1)','rgba(139,92,246,0.25)')} onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}>
+                      <button style={btnStyle('#a78bfa', 'rgba(139,92,246,0.1)', 'rgba(139,92,246,0.25)')} onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}>
                         <History size={12} /> Audit
                       </button>
+                      <button style={btnStyle('#a78bfa', 'rgba(139,92,246,0.1)', 'rgba(139,92,246,0.25)')} onClick={() => setHistoryDoc({ id: doc.id, name: doc.name })}>
+                        <Layers size={12} /> Versions
+                      </button>
+                      {status !== 'SIGNED' && status !== 'LOCKED' && (
+                        <button
+                          style={btnStyle('#a78bfa', 'rgba(139,92,246,0.08)', 'rgba(139,92,246,0.2)')}
+                          onClick={() => setNewVersionDoc({ id: doc.id, name: doc.name, versionNo: doc.currentVersion?.versionNo })}
+                        >
+                          <Upload size={12} /> New Version
+                        </button>
+                      )}
                       <button
-                        style={btnStyle('var(--text-secondary)','var(--bg-elevated)','var(--border)')}
+                        style={btnStyle('var(--text-secondary)', 'var(--bg-elevated)', 'var(--border)')}
                         onClick={() => handleDownloadDocument(doc.id, doc.name)}
                         disabled={downloadingId === doc.id}
                       >
                         {downloadingId === doc.id ? <Loader size={11} className="animate-spin" /> : <Download size={12} />}
                         {downloadingId === doc.id ? 'Downloading...' : 'Download'}
                       </button>
-                      <button style={btnStyle('#60a5fa','rgba(59,130,246,0.08)','rgba(59,130,246,0.2)')} onClick={() => setShareDoc({ id: doc.id, name: doc.name })}>
+                      <button style={btnStyle('#60a5fa', 'rgba(59,130,246,0.08)', 'rgba(59,130,246,0.2)')} onClick={() => setShareDoc({ id: doc.id, name: doc.name })}>
                         <Share2 size={12} /> Share
                       </button>
 
                       {/* Workflow Transitions */}
                       {status === 'DRAFT' && (
-                        <button style={btnStyle('#f59e0b','rgba(245,158,11,0.1)','rgba(245,158,11,0.25)')} onClick={() => handleWorkflowAction(doc.id, 'submit')}>
+                        <button style={btnStyle('#f59e0b', 'rgba(245,158,11,0.1)', 'rgba(245,158,11,0.25)')} onClick={() => handleWorkflowAction(doc.id, 'submit')}>
                           <Send size={11} /> Submit
                         </button>
                       )}
                       {isSeniorOfficer && (status === 'SUBMITTED' || status === 'UNDER_REVIEW') && (
                         <>
-                          <button style={{ ...btnStyle('#10b981','#10b981','#10b981'), color: 'white', background: '#10b981', border: 'none', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'approve')}>
+                          <button style={{ ...btnStyle('#10b981', '#10b981', '#10b981'), color: 'white', background: '#10b981', border: 'none', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'approve')}>
                             <CheckCircle2 size={11} /> Approve
                           </button>
-                          <button style={btnStyle('#f87171','rgba(239,68,68,0.1)','rgba(239,68,68,0.25)')} onClick={() => handleWorkflowAction(doc.id, 'reject')}>
+                          <button style={btnStyle('#f87171', 'rgba(239,68,68,0.1)', 'rgba(239,68,68,0.25)')} onClick={() => handleWorkflowAction(doc.id, 'reject')}>
                             <XCircle size={11} /> Reject
                           </button>
                         </>
                       )}
                       {isSeniorOfficer && status === 'APPROVED' && (
-                        <button style={{ ...btnStyle('#3b82f6','#3b82f6','#3b82f6'), color: 'white', background: '#3b82f6', border: 'none', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'sign')}>
+                        <button style={{ ...btnStyle('#3b82f6', '#3b82f6', '#3b82f6'), color: 'white', background: '#3b82f6', border: 'none', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'sign')}>
                           <FileSignature size={11} /> Sign
                         </button>
                       )}
                       {isSeniorOfficer && status === 'SIGNED' && (
-                        <button style={{ ...btnStyle('#a78bfa','#a78bfa','#a78bfa'), color: 'white', background: '#a78bfa', border: 'none', boxShadow: '0 2px 8px rgba(139,92,246,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'lock')}>
+                        <button style={{ ...btnStyle('#a78bfa', '#a78bfa', '#a78bfa'), color: 'white', background: '#a78bfa', border: 'none', boxShadow: '0 2px 8px rgba(139,92,246,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'lock')}>
                           <Lock size={11} /> Lock
                         </button>
                       )}
@@ -455,7 +491,7 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
                   </span>
                   <button
                     onClick={() => setTimelineEv({ id: ev.id, type: ev.type })}
-                    style={btnStyle('#34d399','rgba(16,185,129,0.1)','rgba(16,185,129,0.25)')}
+                    style={btnStyle('#34d399', 'rgba(16,185,129,0.1)', 'rgba(16,185,129,0.25)')}
                   >
                     <Clock size={11} /> Custody ({ev.custodyEventCount || 1})
                   </button>
@@ -573,7 +609,77 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
 
       {/* ── Access Tab ── */}
       {activeTab === 'access' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* ── Case Team ── */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div>
+                <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Case Team</h3>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Only officers listed here (or an Admin) can see or act on this case at all.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddOfficer(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 13px',
+                  borderRadius: '8px', background: 'rgba(59,130,246,0.1)', color: '#60a5fa',
+                  border: '1px solid rgba(59,130,246,0.25)', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                <Users size={12} /> Add Officer
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {team.map(member => (
+                <div key={member.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
+                      background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '11px', fontWeight: 700, color: '#60a5fa',
+                    }}>
+                      {member.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {member.name}
+                        {member.isCreator && (
+                          <span style={{
+                            fontSize: '8px', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.12)',
+                            border: '1px solid rgba(245,158,11,0.3)', borderRadius: '9999px', padding: '1px 6px',
+                          }}>CREATOR</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                        {member.role.replace('_', ' ')}{member.department ? ` · ${member.department}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                  {!member.isCreator && (
+                    <button
+                      onClick={() => handleRemoveOfficer(member.id, member.name)}
+                      disabled={removingOfficerId === member.id}
+                      style={{
+                        padding: '5px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
+                        background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171',
+                        opacity: removingOfficerId === member.id ? 0.5 : 1,
+                      }}
+                    >
+                      {removingOfficerId === member.id ? 'Removing...' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Document Shares ── */}
           <div style={{
             padding: '14px 16px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
             borderRadius: '10px', fontSize: '12px', color: 'var(--text-muted)',
@@ -656,8 +762,26 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
       {ledgerDoc && <BlockchainLedgerModal documentId={ledgerDoc.id} documentName={ledgerDoc.name} onClose={() => setLedgerDoc(null)} />}
       {shareDoc && <ShareModal documentId={shareDoc.id} documentName={shareDoc.name} onClose={() => setShareDoc(null)} onSuccess={fetchCaseDetails} />}
       {auditDoc && <DocumentAuditModal documentId={auditDoc.id} documentName={auditDoc.name} onClose={() => setAuditDoc(null)} />}
+      {historyDoc && <VersionHistoryModal documentId={historyDoc.id} documentName={historyDoc.name} onClose={() => setHistoryDoc(null)} />}
+      {newVersionDoc && (
+        <NewVersionModal
+          documentId={newVersionDoc.id}
+          documentName={newVersionDoc.name}
+          currentVersionNo={newVersionDoc.versionNo}
+          onClose={() => setNewVersionDoc(null)}
+          onSuccess={fetchCaseDetails}
+        />
+      )}
       {previewDoc && <PreviewModal documentId={previewDoc.id} documentName={previewDoc.name} mimeType={previewDoc.mimeType} onClose={() => setPreviewDoc(null)} />}
       {timelineEv && <EvidenceTimelineModal evidenceId={timelineEv.id} evidenceType={timelineEv.type} onClose={() => setTimelineEv(null)} onCustodyUpdated={fetchCaseDetails} />}
+      {showAddOfficer && (
+        <AddOfficerModal
+          caseId={caseId}
+          currentTeam={team}
+          onClose={() => setShowAddOfficer(false)}
+          onSuccess={fetchCaseDetails}
+        />
+      )}
     </div>
   );
 };

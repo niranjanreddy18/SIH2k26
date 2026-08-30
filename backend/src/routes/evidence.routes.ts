@@ -53,9 +53,10 @@ router.post('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest,
 router.get('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { caseId } = req.params;
   const { page, limit, offset } = parsePagination(req);
+  const user = req.user!;
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
-  if (!caseRow.rows[0]) {
+  if (!caseRow.rows[0] || !(await hasCaseAccess(caseId, user))) {
     return sendError(res, 'NOT_FOUND', `Case ${caseId} not found.`, 404);
   }
 
@@ -98,7 +99,7 @@ router.get('/evidence/:id', authenticateJWT, async (req: AuthRequest, res: Respo
     [id]
   );
 
-  if (!row.rows[0]) {
+  if (!row.rows[0] || !(await hasCaseAccess(row.rows[0].case_id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Evidence ${id} not found.`, 404);
   }
 
@@ -197,8 +198,8 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
 router.get('/evidence/:id/custody', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
 
-  const evRow = await pool.query(`SELECT id FROM evidence WHERE id = $1`, [id]);
-  if (!evRow.rows[0]) {
+  const evRow = await pool.query(`SELECT id, case_id FROM evidence WHERE id = $1`, [id]);
+  if (!evRow.rows[0] || !(await hasCaseAccess(evRow.rows[0].case_id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Evidence ${id} not found.`, 404);
   }
 

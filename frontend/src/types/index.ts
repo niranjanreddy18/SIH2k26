@@ -65,6 +65,8 @@ export interface Case {
   createdBy?: { id: string; name: string } | string;
   createdAt: string;
   updatedAt?: string;
+  isOwner?: boolean;
+  isAssigned?: boolean;
   documentCount?: number;
   evidenceCount?: number;
   pendingApprovals?: number;
@@ -99,7 +101,7 @@ export interface Document {
   currentVersion?: DocumentVersion;
   createdBy?: { id: string; name: string } | string;
   createdAt?: string;
-  versionHistory?: { versionNo: number; status: VersionStatus; createdAt: string }[];
+  versionHistory?: DocumentVersion[];
 }
 
 export interface EvidenceCustodyEvent {
@@ -192,4 +194,18 @@ export interface AuditVerifyChainResult {
   totalEvents: number;
   brokenAt: string | null;
   verifiedAt: string;
+}
+
+export interface CaseAssignment extends User {
+  isCreator: boolean;
+}
+
+export interface SearchResultItem {
+  type: 'case' | 'document';
+  id: string;
+  title: string;
+  snippet: string;
+  caseId: string;
+  firNumber: string;
+  score: number;
 }

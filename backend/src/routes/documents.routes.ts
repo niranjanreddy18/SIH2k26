@@ -38,6 +38,34 @@ async function getDocumentWithVersion(docId: string) {
   return row.rows[0] || null;
 }
 
+// ─── Helper: fetch a specific historical version by version_no ────────────────
+async function getDocumentVersionByNo(docId: string, versionNo: number) {
+  if (!docId || !isUUID(docId)) return null;
+  const row = await pool.query(
+    `SELECT d.id, d.case_id, d.name, d.created_by AS doc_created_by,
+            dv.id AS ver_id, dv.version_no, dv.hash, dv.storage_key, dv.mime_type
+     FROM documents d
+     JOIN document_versions dv ON dv.document_id = d.id
+     WHERE d.id = $1 AND dv.version_no = $2`,
+    [docId, versionNo]
+  );
+  return row.rows[0] || null;
+}
+
+// Text extraction for full-text search — cheap now (text/* and JSON are already
+// text), and the same extracted string is what a future semantic-search upgrade
+// would embed, so this doubles as step one of that pipeline. PDFs/images would
+// need a real extraction/OCR step later; skipped for now, not faked.
+const MAX_EXTRACTED_TEXT_CHARS = 100_000;
+function extractTextIfPossible(buffer: Buffer, mimeType: string): string | null {
+  if (!mimeType.startsWith('text/') && mimeType !== 'application/json') return null;
+  try {
+    return buffer.toString('utf8').slice(0, MAX_EXTRACTED_TEXT_CHARS);
+  } catch {
+    return null;
+  }
+}
+
 // ─── POST /cases/:caseId/documents — Upload new document ──────────────────────
 router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), async (req: AuthRequest, res: Response): Promise<any> => {
   const { caseId } = req.params;
@@ -60,6 +88,7 @@ router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), 
   const mimeType    = req.file ? req.file.mimetype : 'application/pdf';
 
   const { storageKey, hash, fileSize } = await StorageService.saveFile(fileBuffer, originalName);
+  const extractedText = extractTextIfPossible(fileBuffer, mimeType);
 
   const docId = uuidv4();
   const verId = uuidv4();
@@ -75,9 +104,9 @@ router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), 
     );
 
     await client.query(
-      `INSERT INTO document_versions (id, document_id, version_no, hash, storage_key, file_size, mime_type, status, comment, created_by)
-       VALUES ($1, $2, 1, $3, $4, $5, $6, 'DRAFT'::version_status, 'Initial upload', $7)`,
-      [verId, docId, hash, storageKey, fileSize, mimeType, user.id]
+      `INSERT INTO document_versions (id, document_id, version_no, hash, storage_key, file_size, mime_type, status, comment, created_by, extracted_text)
+       VALUES ($1, $2, 1, $3, $4, $5, $6, 'SUBMITTED'::version_status, 'Initial upload', $7, $8)`,
+      [verId, docId, hash, storageKey, fileSize, mimeType, user.id, extractedText]
     );
 
     await client.query(
@@ -97,16 +126,20 @@ router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), 
   }
 
   await logAuditEvent(user.id, 'DOCUMENT_UPLOADED', 'DOCUMENT', docId);
+  // Uploads go straight to SUBMITTED — no separate manual "Submit" click required.
+  await logAuditEvent(user.id, 'DOCUMENT_SUBMITTED', 'DOCUMENT', docId);
 
   // ── Fabric: Register document on-chain (async, non-blocking) ──
   FabricService.registerDocument(
     docId, caseId, name, type, hash, user.id, user.name,
     classification || 'INTERNAL', 1
   ).catch(err => console.error('Fabric registerDocument background error:', err.message));
+  FabricService.updateDocumentStatus(docId, 'SUBMITTED', user.id, user.name, hash)
+    .catch(err => console.error('Fabric updateStatus error:', err.message));
 
   return sendSuccess(res, {
     id: docId, caseId, name, type, classification: classification || 'INTERNAL',
-    currentVersion: { id: verId, versionNo: 1, hash, status: 'DRAFT' },
+    currentVersion: { id: verId, versionNo: 1, hash, status: 'SUBMITTED' },
   }, 201);
 });
 
@@ -116,9 +149,10 @@ router.get('/cases/:caseId/documents', authenticateJWT, async (req: AuthRequest,
   const { page, limit, offset } = parsePagination(req);
   const typeFilter   = req.query.type as string | undefined;
   const statusFilter = req.query.status as string | undefined;
+  const user = req.user!;
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
-  if (!caseRow.rows[0]) {
+  if (!caseRow.rows[0] || !(await hasCaseAccess(caseId, user))) {
     return sendError(res, 'NOT_FOUND', `Case ${caseId} not found.`, 404);
   }
 
@@ -174,13 +208,16 @@ router.get('/documents/:id', authenticateJWT, async (req: AuthRequest, res: Resp
   const { id } = req.params;
   const doc = await getDocumentWithVersion(id);
 
-  if (!doc) {
+  if (!doc || !(await hasCaseAccess(doc.case_id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Document ${id} not found.`, 404);
   }
 
   const versions = await pool.query(
-    `SELECT version_no, status, created_at FROM document_versions
-     WHERE document_id = $1 ORDER BY version_no ASC`,
+    `SELECT dv.id, dv.version_no, dv.status, dv.hash, dv.comment, dv.file_size, dv.mime_type, dv.created_at,
+            u.id AS created_by_id, u.name AS created_by_name
+     FROM document_versions dv
+     JOIN users u ON dv.created_by = u.id
+     WHERE dv.document_id = $1 ORDER BY dv.version_no ASC`,
     [id]
   );
 
@@ -206,7 +243,10 @@ router.get('/documents/:id', authenticateJWT, async (req: AuthRequest, res: Resp
       blockchainRef: bcRow.rows[0]?.tx_reference || null,
     } : null,
     versionHistory: versions.rows.map(v => ({
-      versionNo: v.version_no, status: v.status, createdAt: v.created_at,
+      id: v.id, versionNo: v.version_no, status: v.status, hash: v.hash, comment: v.comment,
+      fileSize: v.file_size, mimeType: v.mime_type,
+      createdBy: { id: v.created_by_id, name: v.created_by_name },
+      createdAt: v.created_at,
     })),
   });
 });
@@ -288,6 +328,47 @@ router.get('/documents/:id/preview', authenticateJWT, async (req: AuthRequest, r
   }
 });
 
+// ─── GET /documents/:id/versions/:versionNo/download — Fetch a historical version ─
+// GET .../preview does the same but inline. Both are scoped to whoever has case
+// access (or is an owner/senior/admin) — historical browsing isn't tied to a
+// share grant, since shares are issued against one specific version already
+// reachable via the plain /download and /preview routes above.
+async function serveHistoricalVersion(req: AuthRequest, res: Response, disposition: 'attachment' | 'inline') {
+  const { id, versionNo } = req.params;
+  const verNo = parseInt(versionNo, 10);
+  if (isNaN(verNo)) {
+    return sendError(res, 'VALIDATION_ERROR', 'versionNo must be a number.', 400);
+  }
+
+  const ver = await getDocumentVersionByNo(id, verNo);
+  if (!ver || !ver.storage_key) {
+    return sendError(res, 'NOT_FOUND', `Version ${versionNo} of document ${id} not found.`, 404);
+  }
+
+  const user = req.user!;
+  const isOwnerOrSenior = user.role === 'SENIOR_OFFICER' || user.role === 'ADMIN';
+  if (!isOwnerOrSenior && !(await hasCaseAccess(ver.case_id, user)) && ver.doc_created_by !== user.id) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You do not have permission to access this version.', 403);
+  }
+
+  try {
+    const fileBuffer = await StorageService.getFile(ver.storage_key);
+    await logAuditEvent(user.id, disposition === 'inline' ? 'DOCUMENT_PREVIEWED' : 'DOCUMENT_DOWNLOADED', 'DOCUMENT', id);
+    res.setHeader('Content-Type', ver.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `${disposition}; filename="${ver.name} (v${verNo})"`);
+    res.setHeader('Content-Length', fileBuffer.length.toString());
+    return res.send(fileBuffer);
+  } catch (err: any) {
+    return sendError(res, 'NOT_FOUND', `File not available in storage: ${err.message}`, 404);
+  }
+}
+
+router.get('/documents/:id/versions/:versionNo/download', authenticateJWT, (req: AuthRequest, res: Response) =>
+  serveHistoricalVersion(req, res, 'attachment'));
+
+router.get('/documents/:id/versions/:versionNo/preview', authenticateJWT, (req: AuthRequest, res: Response) =>
+  serveHistoricalVersion(req, res, 'inline'));
+
 // ─── POST /documents/:id/versions — Create new version ───────────────────────
 router.post('/documents/:id/versions', authenticateJWT, upload.single('file'), async (req: AuthRequest, res: Response): Promise<any> => {
   const { id }    = req.params;
@@ -297,6 +378,10 @@ router.post('/documents/:id/versions', authenticateJWT, upload.single('file'), a
   const doc = await getDocumentWithVersion(id);
   if (!doc) {
     return sendError(res, 'NOT_FOUND', `Document ${id} not found.`, 404);
+  }
+
+  if (!(await hasCaseAccess(doc.case_id, user))) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
   }
 
   // Enforce edit-lock: signed/locked documents cannot get new versions
@@ -316,6 +401,7 @@ router.post('/documents/:id/versions', authenticateJWT, upload.single('file'), a
   const mimeType     = req.file ? req.file.mimetype : 'application/pdf';
 
   const { storageKey, hash, fileSize } = await StorageService.saveFile(fileBuffer, originalName);
+  const extractedText = extractTextIfPossible(fileBuffer, mimeType);
   const verId = uuidv4();
 
   const client = await pool.connect();
@@ -323,9 +409,9 @@ router.post('/documents/:id/versions', authenticateJWT, upload.single('file'), a
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO document_versions (id, document_id, version_no, hash, storage_key, file_size, mime_type, status, comment, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT'::version_status, $8, $9)`,
-      [verId, id, newVersionNo, hash, storageKey, fileSize, mimeType, comment || `Version ${newVersionNo}`, user.id]
+      `INSERT INTO document_versions (id, document_id, version_no, hash, storage_key, file_size, mime_type, status, comment, created_by, extracted_text)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT'::version_status, $8, $9, $10)`,
+      [verId, id, newVersionNo, hash, storageKey, fileSize, mimeType, comment || `Version ${newVersionNo}`, user.id, extractedText]
     );
 
     await client.query(

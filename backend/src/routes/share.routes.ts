@@ -105,7 +105,7 @@ router.get('/cases/:id/shares', authenticateJWT, async (req: AuthRequest, res: R
   const { id } = req.params;
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [id]);
-  if (!caseRow.rows[0]) {
+  if (!caseRow.rows[0] || !(await hasCaseAccess(id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
   }
 

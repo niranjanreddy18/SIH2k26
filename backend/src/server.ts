@@ -15,6 +15,7 @@ import documentsRoutes from './routes/documents.routes';
 import blockchainRoutes from './routes/blockchain.routes';
 import adminRoutes from './routes/admin.routes';
 import usersRoutes from './routes/users.routes';
+import searchRoutes from './routes/search.routes';
 import { errorHandler } from './middlewares/errorHandler';
 import { runMigrations } from './db/migrate';
 import { seedDatabase } from './db/seed';
@@ -43,6 +44,7 @@ app.use('/', documentsRoutes);   // /cases/:caseId/documents, /documents/:id, /d
 app.use('/blockchain', blockchainRoutes);
 app.use('/admin', adminRoutes);
 app.use('/users', usersRoutes);
+app.use('/search', searchRoutes);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {

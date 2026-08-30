@@ -114,6 +114,13 @@ export async function runMigrations(): Promise<void> {
       END $$;
     `);
 
+    // Plain-text content extracted at upload time (text/* and application/json only
+    // for now). Full-text search reads this column today; a future semantic-search
+    // upgrade would embed this same column instead of re-deriving it from storage.
+    await client.query(`
+      ALTER TABLE "document_versions" ADD COLUMN IF NOT EXISTS "extracted_text" TEXT;
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS "approvals" (
         "id"                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, FileText, CheckCircle2, Loader, CloudUpload } from 'lucide-react';
+import { X, Upload, FileText, Loader, CloudUpload } from 'lucide-react';
 import api from '../services/api';
 import { useToast } from '../context/ToastContext';
 
@@ -16,7 +16,6 @@ export const DocumentUploadModal: React.FC<Props> = ({ caseId, onClose, onSucces
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ hash: string; id: string; version: number } | null>(null);
   const toast = useToast();
 
   const handleDrop = (e: React.DragEvent) => {
@@ -29,23 +28,23 @@ export const DocumentUploadModal: React.FC<Props> = ({ caseId, onClose, onSucces
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !type) return;
+    if (!file) { toast.error('Please choose a file to upload.'); return; }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append('name', name);
       formData.append('type', type);
       formData.append('classification', classification);
-      if (file) formData.append('file', file);
+      formData.append('file', file);
       const res = await api.post(`/cases/${caseId}/documents`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data.success) {
         const doc = res.data.data;
-        setUploadResult({
-          hash: doc.hash || doc.sha256Hash || 'computed-on-storage',
-          id: doc.id,
-          version: doc.versionNo || 1,
-        });
+        const hash = doc.hash || doc.sha256Hash || '';
+        toast.success(`Document uploaded${hash ? ` — SHA-256 ${hash.slice(0, 16)}…` : ''}`);
+        onSuccess();
+        onClose();
       }
     } catch (err: any) {
       toast.error('Upload failed: ' + (err.response?.data?.error?.message || err.message));
@@ -91,90 +90,44 @@ export const DocumentUploadModal: React.FC<Props> = ({ caseId, onClose, onSucces
           </button>
         </div>
 
-        {uploadResult ? (
-          /* Success State */
-          <div className="animate-fade-in-up" style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <div className="animate-glow-green" style={{
-              display: 'inline-flex', padding: '16px',
-              background: 'rgba(16,185,129,0.1)', border: '2px solid rgba(16,185,129,0.4)',
-              borderRadius: '50%', marginBottom: '16px',
-            }}>
-              <CheckCircle2 size={32} color="#10b981" />
+        <form onSubmit={handleUpload} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+              Document Name *
+            </label>
+            <input type="text" required placeholder="e.g. Witness Statement – Informant Alpha" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Type *</label>
+              <select value={type} onChange={e => setType(e.target.value)} style={inputStyle}>
+                <option value="FIR">FIR</option>
+                <option value="COMPLAINT">COMPLAINT</option>
+                <option value="WITNESS_STATEMENT">WITNESS STATEMENT</option>
+                <option value="INVESTIGATION_REPORT">INVESTIGATION REPORT</option>
+                <option value="FORENSIC_REPORT">FORENSIC REPORT</option>
+                <option value="SEIZURE_MEMO">SEIZURE MEMO</option>
+                <option value="CHARGE_SHEET">CHARGE SHEET</option>
+                <option value="OTHER">OTHER</option>
+              </select>
             </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#10b981', marginBottom: '6px' }}>
-              Document Uploaded Successfully
-            </h3>
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px',
-              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              borderRadius: '10px', padding: '14px', textAlign: 'left',
-            }}>
-              {[
-                { label: 'SHA-256', value: uploadResult.hash, mono: true, color: '#10b981' },
-                { label: 'Document ID', value: uploadResult.id, mono: true, color: '#60a5fa' },
-                { label: 'Version', value: `v${uploadResult.version}`, mono: false, color: 'var(--text-primary)' },
-              ].map(({ label, value, mono, color }) => (
-                <div key={label}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>{label}:</div>
-                  <div style={{
-                    fontSize: '11px', color, fontFamily: mono ? 'JetBrains Mono, monospace' : undefined,
-                    wordBreak: 'break-all', lineHeight: 1.5,
-                  }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              <button
-                onClick={() => { setUploadResult(null); setName(''); setFile(null); }}
-                style={{
-                  flex: 1, padding: '9px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
-                  background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer',
-                }}
-              >Upload Another</button>
-              <button
-                onClick={() => { onSuccess(); onClose(); }}
-                style={{
-                  flex: 1, padding: '9px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                  background: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer',
-                }}
-              >Done</button>
+            <div>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Classification</label>
+              <select value={classification} onChange={e => setClassification(e.target.value)} style={inputStyle}>
+                <option value="PUBLIC">PUBLIC</option>
+                <option value="INTERNAL">INTERNAL</option>
+                <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+                <option value="HIGHLY_CONFIDENTIAL">HIGHLY CONFIDENTIAL</option>
+              </select>
             </div>
           </div>
-        ) : (
-          <form onSubmit={handleUpload} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
-                Document Name *
-              </label>
-              <input type="text" required placeholder="e.g. Witness Statement – Informant Alpha" value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
-            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Type *</label>
-                <select value={type} onChange={e => setType(e.target.value)} style={inputStyle}>
-                  <option value="FIR">FIR</option>
-                  <option value="COMPLAINT">COMPLAINT</option>
-                  <option value="WITNESS_STATEMENT">WITNESS STATEMENT</option>
-                  <option value="INVESTIGATION_REPORT">INVESTIGATION REPORT</option>
-                  <option value="FORENSIC_REPORT">FORENSIC REPORT</option>
-                  <option value="SEIZURE_MEMO">SEIZURE MEMO</option>
-                  <option value="CHARGE_SHEET">CHARGE SHEET</option>
-                  <option value="OTHER">OTHER</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Classification</label>
-                <select value={classification} onChange={e => setClassification(e.target.value)} style={inputStyle}>
-                  <option value="PUBLIC">PUBLIC</option>
-                  <option value="INTERNAL">INTERNAL</option>
-                  <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-                  <option value="HIGHLY_CONFIDENTIAL">HIGHLY CONFIDENTIAL</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Drag-and-drop zone */}
+          {/* Drag-and-drop zone */}
+          <div>
+            <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+              File *
+            </label>
             <div
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
@@ -208,28 +161,24 @@ export const DocumentUploadModal: React.FC<Props> = ({ caseId, onClose, onSucces
                 </>
               )}
             </div>
+          </div>
 
-            <p style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center' }}>
-              If no file is chosen, a sample document stream will be generated automatically.
-            </p>
-
-            <div style={{ display: 'flex', gap: '10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>
-              <button type="button" onClick={onClose} style={{
-                flex: 1, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
-                background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer',
-              }}>Cancel</button>
-              <button type="submit" disabled={uploading} style={{
-                flex: 2, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
-                background: uploading ? 'rgba(59,130,246,0.5)' : '#3b82f6', color: 'white',
-                border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
-                boxShadow: uploading ? 'none' : '0 4px 16px rgba(59,130,246,0.25)',
-              }}>
-                {uploading ? <><Loader size={13} className="animate-spin" /> Uploading &amp; Hashing...</> : <><Upload size={13} /> Upload Document</>}
-              </button>
-            </div>
-          </form>
-        )}
+          <div style={{ display: 'flex', gap: '10px', paddingTop: '4px', borderTop: '1px solid var(--border)' }}>
+            <button type="button" onClick={onClose} style={{
+              flex: 1, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer',
+            }}>Cancel</button>
+            <button type="submit" disabled={uploading || !file} style={{
+              flex: 2, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+              background: (uploading || !file) ? 'rgba(59,130,246,0.5)' : '#3b82f6', color: 'white',
+              border: 'none', cursor: (uploading || !file) ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              boxShadow: (uploading || !file) ? 'none' : '0 4px 16px rgba(59,130,246,0.25)',
+            }}>
+              {uploading ? <><Loader size={13} className="animate-spin" /> Uploading &amp; Hashing...</> : <><Upload size={13} /> Upload Document</>}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

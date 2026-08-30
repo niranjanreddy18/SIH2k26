@@ -46,7 +46,7 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
-      <Header />
+      <Header onSelectCase={handleSelectCase} />
 
       <div className="flex flex-1">
         <Sidebar

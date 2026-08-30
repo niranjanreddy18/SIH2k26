@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS "document_versions" (
   "comment" TEXT,
   "created_by" UUID NOT NULL REFERENCES "users"("id") ON DELETE RESTRICT,
   "created_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "extracted_text" TEXT,
   CONSTRAINT "unique_document_version" UNIQUE("document_id", "version_no")
 );
 

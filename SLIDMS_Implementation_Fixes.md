@@ -99,12 +99,14 @@
 
 - MFA/TOTP enforcement (field exists, zero logic — login flow has no MFA step)
 - Real MinIO/S3 storage (currently local filesystem)
-- File preview (inline PDF/image viewer)
 - Real PKI digital signatures (currently records a signature event without cryptographic signing)
 - WebSocket real-time updates
 - Dashboard charts
 - Rate limiting middleware
-- Full-text document search
+
+### Done, ahead of schedule
+- **File preview** (inline PDF/image/text viewer) — `PreviewModal.tsx`, `GET /documents/:id/preview` (and the historical-version variant).
+- **Full-text document search** — ✅ DONE 2026-08-30. `GET /search?q=` (`backend/src/routes/search.routes.ts`) using Postgres `tsvector`/`ts_rank`/`ts_headline` with prefix matching, over case metadata + document metadata + `document_versions.extracted_text` (populated at upload/new-version time for `text/*` and `application/json` files — PDFs/images aren't extracted yet, that's the natural next step). Global search bar lives in `Header.tsx`, debounced, with highlighted snippets and click-to-navigate. **Built deliberately upgradable**: the `extracted_text` column and the `?q=` → ranked-results contract are the same shape a future embeddings-based semantic search would reuse — swap the SQL ranking for a vector similarity query later without changing the frontend or the API contract.
 
 ---
 

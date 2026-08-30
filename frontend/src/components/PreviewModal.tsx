@@ -7,6 +7,8 @@ interface Props {
   documentId: string;
   documentName: string;
   mimeType?: string;
+  /** When set, previews/downloads this historical version instead of the current one. */
+  versionNo?: number;
   onClose: () => void;
 }
 
@@ -19,7 +21,7 @@ const isPreviewable = (mimeType?: string) =>
 // A file this large would be unpleasant to dump into a <pre> block — treat as download-only.
 const MAX_TEXT_PREVIEW_BYTES = 512 * 1024;
 
-export const PreviewModal: React.FC<Props> = ({ documentId, documentName, mimeType, onClose }) => {
+export const PreviewModal: React.FC<Props> = ({ documentId, documentName, mimeType, versionNo, onClose }) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
   const [textTruncated, setTextTruncated] = useState(false);
@@ -29,12 +31,18 @@ export const PreviewModal: React.FC<Props> = ({ documentId, documentName, mimeTy
   const toast = useToast();
   const previewable = isPreviewable(mimeType);
   const isText = isTextMime(mimeType);
+  const previewUrl = versionNo
+    ? `/documents/${documentId}/versions/${versionNo}/preview`
+    : `/documents/${documentId}/preview`;
+  const downloadUrl = versionNo
+    ? `/documents/${documentId}/versions/${versionNo}/download`
+    : `/documents/${documentId}/download`;
 
   const fetchPreview = () => {
     if (!previewable) { setLoading(false); return; }
     setLoading(true);
     setLoadError(false);
-    api.get(`/documents/${documentId}/preview`, { responseType: 'blob' })
+    api.get(previewUrl, { responseType: 'blob' })
       .then(async res => {
         if (isText) {
           const truncated = res.data.size > MAX_TEXT_PREVIEW_BYTES;
@@ -53,12 +61,12 @@ export const PreviewModal: React.FC<Props> = ({ documentId, documentName, mimeTy
     fetchPreview();
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId]);
+  }, [documentId, versionNo]);
 
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const res = await api.get(`/documents/${documentId}/download`, { responseType: 'blob' });
+      const res = await api.get(downloadUrl, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -90,7 +98,9 @@ export const PreviewModal: React.FC<Props> = ({ documentId, documentName, mimeTy
           background: 'var(--bg-elevated)', flexShrink: 0,
         }}>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Document Preview</div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              Document Preview{versionNo ? ` — v${versionNo}` : ''}
+            </div>
             <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', marginTop: '2px' }}>
               {documentName}{mimeType ? ` · ${mimeType}` : ''}
             </div>

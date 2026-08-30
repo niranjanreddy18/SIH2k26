@@ -47,16 +47,31 @@ router.post('/', authenticateJWT, async (req: AuthRequest, res: Response): Promi
 });
 
 // ─── GET /cases?page=&limit=&status=&classification= ──────────────────────────
+// A case a user isn't assigned to (and didn't create) doesn't appear here at
+// all — not filtered client-side, not visible-but-blocked. ADMIN sees everything.
 router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { page, limit, offset } = parsePagination(req, 20);
   const status = req.query.status as string | undefined;
   const cls    = req.query.classification as string | undefined;
+  const user   = req.user!;
 
   const conditions: string[] = [];
   const params: any[]        = [];
 
+  // Reused both for the visibility filter (non-admins) and the is_owner/is_assigned
+  // flags below (all roles) — pushed once so both share the same placeholder.
+  params.push(user.id);
+  const userParam = params.length;
+
   if (status) { params.push(status); conditions.push(`c.status = $${params.length}::case_status`); }
   if (cls)    { params.push(cls);    conditions.push(`c.classification = $${params.length}::classification_tier`); }
+  if (user.role !== 'ADMIN') {
+    conditions.push(
+      `(c.created_by = $${userParam} OR EXISTS (
+         SELECT 1 FROM case_assignments ca WHERE ca.case_id = c.id AND ca.user_id = $${userParam}
+       ))`
+    );
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -67,6 +82,8 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promis
   const rows = await pool.query(
     `SELECT c.id, c.fir_number, c.title, c.status, c.classification, c.created_at,
             u.name AS created_by_name,
+            (c.created_by = $${userParam}) AS is_owner,
+            EXISTS (SELECT 1 FROM case_assignments ca WHERE ca.case_id = c.id AND ca.user_id = $${userParam}) AS is_assigned,
             (SELECT COUNT(*) FROM documents   d  WHERE d.case_id  = c.id) AS doc_count,
             (SELECT COUNT(*) FROM evidence    e  WHERE e.case_id  = c.id) AS ev_count,
             (SELECT COUNT(*) FROM document_versions dv
@@ -84,6 +101,8 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promis
     id: c.id, firNumber: c.fir_number, title: c.title,
     status: c.status, classification: c.classification,
     createdBy: { name: c.created_by_name },
+    isOwner: c.is_owner,
+    isAssigned: c.is_assigned,
     documentCount: parseInt(c.doc_count),
     evidenceCount: parseInt(c.ev_count),
     pendingApprovals: parseInt(c.pending),
@@ -96,6 +115,7 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promis
 // ─── GET /cases/:id ────────────────────────────────────────────────────────────
 router.get('/:id', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
+  const user = req.user!;
 
   const row = await pool.query(
     `SELECT c.id, c.fir_number, c.title, c.description, c.crime_type,
@@ -107,7 +127,9 @@ router.get('/:id', authenticateJWT, async (req: AuthRequest, res: Response): Pro
     [id]
   );
 
-  if (!row.rows[0]) {
+  // Same 404 either way — a case you have no access to should look exactly
+  // like a case that doesn't exist, not confirm its existence via a 403.
+  if (!row.rows[0] || !(await hasCaseAccess(id, user))) {
     return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
   }
 
@@ -190,6 +212,80 @@ router.patch('/:id', authenticateJWT, async (req: AuthRequest, res: Response): P
 
   await logAuditEvent(user.id, 'CASE_UPDATED', 'CASE', id);
   return sendSuccess(res, { id, updated: true });
+});
+
+// ─── GET /cases/:id/assignments — Officers with access to this case ──────────
+router.get('/:id/assignments', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const user = req.user!;
+
+  const caseRow = await pool.query(`SELECT id, created_by FROM cases WHERE id = $1`, [id]);
+  if (!caseRow.rows[0] || !(await hasCaseAccess(id, user))) {
+    return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
+  }
+
+  const rows = await pool.query(
+    `SELECT u.id, u.name, u.email, u.role, u.department
+     FROM case_assignments ca
+     JOIN users u ON ca.user_id = u.id
+     WHERE ca.case_id = $1
+     ORDER BY u.name ASC`,
+    [id]
+  );
+
+  const createdBy = caseRow.rows[0].created_by;
+  return sendSuccess(res, rows.rows.map(u => ({
+    id: u.id, name: u.name, email: u.email, role: u.role, department: u.department,
+    isCreator: u.id === createdBy,
+  })));
+});
+
+// ─── POST /cases/:id/assignments — Add an officer to a case ──────────────────
+router.post('/:id/assignments', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { userId } = req.body;
+  const user = req.user!;
+
+  const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [id]);
+  if (!caseRow.rows[0] || !(await hasCaseAccess(id, user))) {
+    return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
+  }
+  if (!userId) {
+    return sendError(res, 'VALIDATION_ERROR', 'userId is required.', 400);
+  }
+
+  const targetUser = await pool.query(`SELECT id, name FROM users WHERE id = $1`, [userId]);
+  if (!targetUser.rows[0]) {
+    return sendError(res, 'NOT_FOUND', `User ${userId} not found.`, 404);
+  }
+
+  await pool.query(
+    `INSERT INTO case_assignments (id, case_id, user_id) VALUES (uuid_generate_v4(), $1, $2)
+     ON CONFLICT ON CONSTRAINT unique_case_user DO NOTHING`,
+    [id, userId]
+  );
+
+  await logAuditEvent(user.id, 'CASE_OFFICER_ASSIGNED', 'CASE', id);
+  return sendSuccess(res, { caseId: id, addedUser: { id: targetUser.rows[0].id, name: targetUser.rows[0].name } }, 201);
+});
+
+// ─── DELETE /cases/:id/assignments/:userId — Remove an officer from a case ───
+router.delete('/:id/assignments/:userId', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id, userId } = req.params;
+  const user = req.user!;
+
+  const caseRow = await pool.query(`SELECT id, created_by FROM cases WHERE id = $1`, [id]);
+  if (!caseRow.rows[0] || !(await hasCaseAccess(id, user))) {
+    return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
+  }
+  if (caseRow.rows[0].created_by === userId) {
+    return sendError(res, 'VALIDATION_ERROR', 'The case creator cannot be unassigned.', 400);
+  }
+
+  await pool.query(`DELETE FROM case_assignments WHERE case_id = $1 AND user_id = $2`, [id, userId]);
+
+  await logAuditEvent(user.id, 'CASE_OFFICER_UNASSIGNED', 'CASE', id);
+  return sendSuccess(res, { caseId: id, removedUserId: userId });
 });
 
 export default router;

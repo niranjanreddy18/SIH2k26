@@ -4,6 +4,7 @@ import { sendPaginated, sendSuccess, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest } from '../middlewares/auth';
 import { CryptoService } from '../services/crypto.service';
 import { parsePagination } from '../utils/pagination';
+import { hasCaseAccess } from '../utils/access';
 
 const router = Router();
 
@@ -15,8 +16,8 @@ router.get('/documents/:id/audit', authenticateJWT, async (req: AuthRequest, res
   const from   = req.query.from   as string | undefined;
   const to     = req.query.to     as string | undefined;
 
-  const docRow = await pool.query(`SELECT id FROM documents WHERE id = $1`, [id]);
-  if (!docRow.rows[0]) {
+  const docRow = await pool.query(`SELECT id, case_id FROM documents WHERE id = $1`, [id]);
+  if (!docRow.rows[0] || !(await hasCaseAccess(docRow.rows[0].case_id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Document ${id} not found.`, 404);
   }
 
@@ -71,7 +72,7 @@ router.get('/cases/:id/audit', authenticateJWT, async (req: AuthRequest, res: Re
   const to     = req.query.to     as string | undefined;
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [id]);
-  if (!caseRow.rows[0]) {
+  if (!caseRow.rows[0] || !(await hasCaseAccess(id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
   }
 
