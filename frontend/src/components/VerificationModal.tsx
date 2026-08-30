@@ -44,7 +44,7 @@ const HashReveal: React.FC<{ hash: string; color: string; mismatchHash?: string;
   return (
     <div style={{
       fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', padding: '10px 12px',
-      background: 'rgba(0,0,0,0.3)', borderRadius: '6px',
+      background: 'rgba(255,255,255)', borderRadius: '6px',
       border: `1px solid ${color}44`, wordBreak: 'break-all', lineHeight: 1.6,
     }}>
       {displayed.split('').map((ch, idx) => {
@@ -209,8 +209,8 @@ export const VerificationModal: React.FC<Props> = ({ documentId, documentName, o
                       {i < loadingStep
                         ? <Check size={10} color="white" />
                         : i === loadingStep
-                        ? <Loader size={10} color="white" className="animate-spin" />
-                        : null
+                          ? <Loader size={10} color="white" className="animate-spin" />
+                          : null
                       }
                     </div>
                     <span style={{ fontSize: '12px', color: i <= loadingStep ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
@@ -277,12 +277,12 @@ export const VerificationModal: React.FC<Props> = ({ documentId, documentName, o
               {/* Blockchain Reference */}
               {(result.txReference || result.blockchainRef) && (
                 <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
                     Blockchain Reference:
                   </div>
                   <div style={{
                     padding: '8px 12px', borderRadius: '6px',
-                    background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(59,130,246,0.2)',
+                    background: 'rgba(255,255,255)', border: '1px solid black',
                     fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#60a5fa',
                   }}>
                     {result.txReference || result.blockchainRef}

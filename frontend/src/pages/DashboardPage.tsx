@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   FolderKanban, FileCheck2, Clock, ShieldCheck, Plus,
-  ArrowUpRight, Link2, Building2, TrendingUp, AlertTriangle
+  ArrowUpRight, AlertTriangle
 } from 'lucide-react';
 import api from '../services/api';
 import { Case } from '../types';
@@ -36,23 +36,16 @@ export const DashboardPage: React.FC<Props> = ({ onSelectCase, onOpenNewCase }) 
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [blockchainStatus, setBlockchainStatus] = useState<any>(null);
 
   const fetchData = async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [casesRes, bcRes] = await Promise.allSettled([
-        api.get('/cases?limit=5'),
-        api.get('/blockchain/status'),
-      ]);
-      if (casesRes.status === 'fulfilled' && casesRes.value.data.success) {
-        setCases(casesRes.value.data.data.items || []);
+      const casesRes = await api.get('/cases?limit=5');
+      if (casesRes.data.success) {
+        setCases(casesRes.data.data.items || []);
       } else {
         setLoadError(true);
-      }
-      if (bcRes.status === 'fulfilled' && bcRes.value.data.success) {
-        setBlockchainStatus(bcRes.value.data.data || null);
       }
     } catch (err) {
       setLoadError(true);
@@ -136,63 +129,6 @@ export const DashboardPage: React.FC<Props> = ({ onSelectCase, onOpenNewCase }) 
             ))}
           </>
         )}
-      </div>
-
-      {/* Blockchain Network Card */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0d1526, #111827)',
-        border: '1px solid rgba(59,130,246,0.2)',
-        borderRadius: '14px',
-        padding: '20px 24px',
-      }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-              <Link2 size={18} color="#3b82f6" />
-              <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
-                Hyperledger Fabric Permissioned Ledger
-              </span>
-              {blockchainStatus?.connected ? (
-                <span style={{
-                  fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                  color: '#10b981', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)',
-                  borderRadius: '9999px', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px',
-                }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite', display: 'inline-block' }} />
-                  NETWORK LIVE
-                </span>
-              ) : (
-                <span style={{
-                  fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                  color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
-                  borderRadius: '9999px', padding: '3px 10px',
-                }}>
-                  DUAL-WRITE FALLBACK
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Multi-org SHA-256 immutable ledger anchoring document hashes and evidence custody across law enforcement agencies.
-            </p>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {[
-              { icon: Building2, label: 'Orgs', value: 'Police · Forensic · Judiciary' },
-              { icon: TrendingUp, label: 'Channel', value: blockchainStatus?.channel || 'slidms-channel' },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} style={{
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '8px', padding: '8px 14px',
-                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px',
-                fontFamily: 'JetBrains Mono, monospace',
-              }}>
-                <Icon size={13} color="#6b7280" />
-                <span style={{ color: 'var(--text-muted)' }}>{label}:</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Main Grid: Recent Cases + Pending Approvals */}

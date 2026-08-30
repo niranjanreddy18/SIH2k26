@@ -97,7 +97,7 @@ full 9999px  (pills, avatars)
 ### 1.5 Shadows & Elevation
 
 ```
-card        0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3)
+card        0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(255,255,255)
 modal       0 20px 60px rgba(0,0,0,0.6)
 glow-blue   0 0 20px rgba(59,130,246,0.3)
 glow-green  0 0 20px rgba(16,185,129,0.3)

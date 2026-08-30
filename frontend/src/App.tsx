@@ -2,12 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { Header } from './components/Header';
-import { Sidebar } from './components/Sidebar';
 import { DashboardPage } from './pages/DashboardPage';
 import { CasesPage } from './pages/CasesPage';
 import { CaseDetailPage } from './pages/CaseDetailPage';
 import { SharedPage } from './pages/SharedPage';
-import { AuditPage } from './pages/AuditPage';
 import { AdminPage } from './pages/AdminPage';
 import { NewCaseModal } from './components/NewCaseModal';
 
@@ -46,50 +44,45 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
-      <Header onSelectCase={handleSelectCase} />
+      <Header
+        onSelectCase={handleSelectCase}
+        activeTab={activeTab}
+        setActiveTab={(tab: string) => {
+          setSelectedCaseId(null);
+          setActiveTab(tab);
+        }}
+      />
 
-      <div className="flex flex-1">
-        <Sidebar
-          activeTab={activeTab}
-          setActiveTab={(tab) => {
-            setSelectedCaseId(null);
-            setActiveTab(tab);
-          }}
-        />
+      <main className="flex-1 p-6 overflow-y-auto">
+        <div className="max-w-7xl mx-auto w-full">
+          {activeTab === 'dashboard' && (
+            <DashboardPage
+              onSelectCase={handleSelectCase}
+              onOpenNewCase={() => setShowNewCaseModal(true)}
+            />
+          )}
 
-        <main className="flex-1 p-6 overflow-y-auto">
-          <div className="max-w-7xl mx-auto w-full">
-            {activeTab === 'dashboard' && (
-              <DashboardPage
-                onSelectCase={handleSelectCase}
-                onOpenNewCase={() => setShowNewCaseModal(true)}
-              />
-            )}
+          {activeTab === 'cases' && (
+            <CasesPage
+              onSelectCase={handleSelectCase}
+              onOpenNewCase={() => setShowNewCaseModal(true)}
+            />
+          )}
 
-            {activeTab === 'cases' && (
-              <CasesPage
-                onSelectCase={handleSelectCase}
-                onOpenNewCase={() => setShowNewCaseModal(true)}
-              />
-            )}
+          {activeTab === 'case-detail' && selectedCaseId && (
+            <CaseDetailPage
+              caseId={selectedCaseId}
+              onBack={handleBackToCases}
+            />
+          )}
 
-            {activeTab === 'case-detail' && selectedCaseId && (
-              <CaseDetailPage
-                caseId={selectedCaseId}
-                onBack={handleBackToCases}
-              />
-            )}
+          {activeTab === 'shared' && (
+            <SharedPage onSelectCase={handleSelectCase} />
+          )}
 
-            {activeTab === 'shared' && (
-              <SharedPage onSelectCase={handleSelectCase} />
-            )}
-
-            {activeTab === 'audit' && <AuditPage />}
-
-            {activeTab === 'admin' && <AdminPage />}
-          </div>
-        </main>
-      </div>
+          {activeTab === 'admin' && <AdminPage />}
+        </div>
+      </main>
 
       {showNewCaseModal && (
         <NewCaseModal

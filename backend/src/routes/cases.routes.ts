@@ -58,25 +58,30 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promis
   const conditions: string[] = [];
   const params: any[]        = [];
 
-  // Reused both for the visibility filter (non-admins) and the is_owner/is_assigned
-  // flags below (all roles) — pushed once so both share the same placeholder.
-  params.push(user.id);
-  const userParam = params.length;
-
   if (status) { params.push(status); conditions.push(`c.status = $${params.length}::case_status`); }
   if (cls)    { params.push(cls);    conditions.push(`c.classification = $${params.length}::classification_tier`); }
   if (user.role !== 'ADMIN') {
+    params.push(user.id);
     conditions.push(
-      `(c.created_by = $${userParam} OR EXISTS (
-         SELECT 1 FROM case_assignments ca WHERE ca.case_id = c.id AND ca.user_id = $${userParam}
+      `(c.created_by = $${params.length} OR EXISTS (
+         SELECT 1 FROM case_assignments ca WHERE ca.case_id = c.id AND ca.user_id = $${params.length}
        ))`
     );
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  // Only ever pass params the WHERE clause actually references — an unreferenced
+  // trailing param makes Postgres's bind protocol reject the query outright
+  // ("bind message supplies N parameters, but prepared statement requires 0").
   const countResult = await pool.query(`SELECT COUNT(*) FROM cases c ${where}`, params);
   const total = parseInt(countResult.rows[0].count);
+
+  // A fresh placeholder for is_owner/is_assigned — appended after the WHERE
+  // params so their numbering above is untouched, and always present regardless
+  // of whether a visibility condition was added (ADMIN never gets one above).
+  params.push(user.id);
+  const userParam = params.length;
 
   params.push(limit, offset);
   const rows = await pool.query(

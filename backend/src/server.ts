@@ -6,6 +6,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Route handlers here are `async (req, res) => {...}` without try/catch, so a
+// rejected promise (a bad query, a thrown error) becomes an unhandled rejection
+// at the process level, not something Express's error middleware ever sees —
+// and Node kills the whole process on those by default, taking every other
+// in-flight request down with it. Log and survive instead; the request that
+// caused it still fails (as a hung connection, not silently), but the server
+// stays up for everyone else.
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled rejection (server staying up):', reason);
+});
+
 import authRoutes from './routes/auth.routes';
 import casesRoutes from './routes/cases.routes';
 import shareRoutes from './routes/share.routes';

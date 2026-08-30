@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, AlertCircle, ArrowRight, Loader } from 'lucide-react';
+import { AlertCircle, ArrowRight, Loader } from 'lucide-react';
 import { UserRole } from '../types';
+import { Logo } from '../components/Logo';
 
 const PERSONAS = [
   { role: 'INVESTIGATOR'    as UserRole, name: 'Inspector Vikram Singh', dept: 'Cyber Crime Cell · CID', badge: '#1d4ed8', color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.25)', roleLabel: 'INVESTIGATOR' },
@@ -68,10 +69,10 @@ export const LoginPage: React.FC = () => {
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div className="animate-glow-blue" style={{
             display: 'inline-flex', padding: '16px',
-            background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
+            background: 'var(--primary-dim)', border: '1px solid rgba(37,99,235,0.25)',
             borderRadius: '20px', marginBottom: '16px',
           }}>
-            <ShieldCheck size={36} color="#3b82f6" />
+            <Logo size={40} />
           </div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
             SLIDMS

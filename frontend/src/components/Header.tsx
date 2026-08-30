@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, LogOut, Link2, Search, FileText, FolderKanban, Loader, X } from 'lucide-react';
+import {
+  LogOut, Search, FileText, FolderKanban, Loader, X,
+  LayoutDashboard, Share2, Shield,
+} from 'lucide-react';
 import api from '../services/api';
 import { SearchResultItem } from '../types';
+import { Logo } from './Logo';
 
 interface Props {
   onSelectCase?: (caseId: string) => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
 }
 
 // ts_headline() wraps matches in << >> — split on those and highlight the middle piece.
@@ -18,22 +24,31 @@ function renderSnippet(snippet: string) {
     if (part === '>>') { highlighting = false; return; }
     if (!part) return;
     out.push(highlighting
-      ? <mark key={i} style={{ background: 'rgba(59,130,246,0.35)', color: '#93c5fd', borderRadius: '2px', padding: '0 1px' }}>{part}</mark>
+      ? <mark key={i} style={{ background: 'rgba(37,99,235,0.18)', color: 'var(--primary-hover)', borderRadius: '2px', padding: '0 1px' }}>{part}</mark>
       : <React.Fragment key={i}>{part}</React.Fragment>);
   });
   return out;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  INVESTIGATOR:    { label: 'INVESTIGATOR',    color: '#60a5fa', bg: 'rgba(59,130,246,0.15)',  border: 'rgba(59,130,246,0.3)'  },
-  SENIOR_OFFICER:  { label: 'SENIOR OFFICER',  color: '#a78bfa', bg: 'rgba(139,92,246,0.15)',  border: 'rgba(139,92,246,0.3)'  },
-  FORENSIC_OFFICER:{ label: 'FORENSIC OFFICER',color: '#34d399', bg: 'rgba(16,185,129,0.15)',  border: 'rgba(16,185,129,0.3)'  },
-  ADMIN:           { label: 'DIRECTORATE ADMIN',color: '#f87171', bg: 'rgba(239,68,68,0.15)',   border: 'rgba(239,68,68,0.3)'   },
+  INVESTIGATOR: { label: 'INVESTIGATOR', color: '#2563eb', bg: 'rgba(37,99,235,0.10)', border: 'rgba(37,99,235,0.25)' },
+  SENIOR_OFFICER: { label: 'SENIOR OFFICER', color: '#7c3aed', bg: 'rgba(124,58,237,0.10)', border: 'rgba(124,58,237,0.25)' },
+  FORENSIC_OFFICER: { label: 'FORENSIC OFFICER', color: '#059669', bg: 'rgba(5,150,105,0.10)', border: 'rgba(5,150,105,0.25)' },
+  ADMIN: { label: 'DIRECTORATE ADMIN', color: '#dc2626', bg: 'rgba(220,38,38,0.10)', border: 'rgba(220,38,38,0.25)' },
 };
 
-export const Header: React.FC<Props> = ({ onSelectCase }) => {
+// "Audit Trail" was removed as a standalone nav item/page — per-case audit
+// history still lives inside CaseDetailPage's own Audit tab.
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'cases', label: 'Cases', icon: FolderKanban },
+  { id: 'shared', label: 'Shared', icon: Share2 },
+];
+
+const ADMIN_ITEM = { id: 'admin', label: 'Admin', icon: Shield };
+
+export const Header: React.FC<Props> = ({ onSelectCase, activeTab, setActiveTab }) => {
   const { user, logout } = useAuth();
-  const [fabricConnected, setFabricConnected] = useState<boolean | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
@@ -77,14 +92,8 @@ export const Header: React.FC<Props> = ({ onSelectCase }) => {
     setResults([]);
   };
 
-  useEffect(() => {
-    if (!user) return;
-    api.get('/blockchain/status')
-      .then(r => setFabricConnected(r.data?.data?.connected ?? false))
-      .catch(() => setFabricConnected(false));
-  }, [user]);
-
   const role = user ? ROLE_CONFIG[user.role] : null;
+  const navItems = user?.role === 'ADMIN' ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
   return (
     <header style={{
@@ -96,148 +105,156 @@ export const Header: React.FC<Props> = ({ onSelectCase }) => {
       zIndex: 40,
       display: 'flex',
       alignItems: 'center',
-      padding: '0 24px',
+      padding: '0 20px',
       justifyContent: 'space-between',
-      boxShadow: '0 1px 20px rgba(0,0,0,0.3)',
+      gap: '20px',
+      boxShadow: 'var(--shadow-card)',
     }}>
-      {/* Left — Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div className="animate-glow-blue" style={{
-          padding: '8px',
-          background: 'rgba(59,130,246,0.15)',
-          border: '1px solid rgba(59,130,246,0.3)',
-          borderRadius: '10px',
-          display: 'flex',
-        }}>
-          <ShieldCheck size={20} color="#3b82f6" />
-        </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Left group — Logo, search, nav (search sits between the logo and the routes) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <Logo size={30} />
+          <div>
             <h1 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>
               SLIDMS
             </h1>
-            <span style={{
-              fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-              color: '#3b82f6', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
-              borderRadius: '9999px', padding: '2px 8px', letterSpacing: '0.04em',
-            }}>SECURE</span>
-            {fabricConnected === true && (
-              <span style={{
-                fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                color: '#34d399', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
-                borderRadius: '9999px', padding: '2px 8px', display: 'flex', alignItems: 'center', gap: '4px',
-              }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite' }} />
-                FABRIC LIVE
-              </span>
+          </div>
+        </div>
+
+        {user && (
+          <div ref={searchBoxRef} style={{ position: 'relative', width: '260px', flexShrink: 1, minWidth: '140px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              placeholder="Search cases & documents..."
+              value={query}
+              onChange={e => { setQuery(e.target.value); setShowResults(true); }}
+              onFocus={() => setShowResults(true)}
+              style={{
+                width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                color: 'var(--text-primary)', borderRadius: '8px', padding: '8px 12px 8px 32px',
+                fontSize: '12px', outline: 'none',
+              }}
+            />
+            {query && (
+              <button
+                onClick={() => { setQuery(''); setResults([]); }}
+                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X size={13} />
+              </button>
             )}
-            {fabricConnected === false && (
-              <span style={{
-                fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
-                borderRadius: '9999px', padding: '2px 8px', display: 'flex', alignItems: 'center', gap: '4px',
+
+            {showResults && query.trim().length >= 2 && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: '340px',
+                background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
+                boxShadow: 'var(--shadow-modal)', maxHeight: '400px', overflowY: 'auto', zIndex: 50,
+                textAlign: 'left',
               }}>
-                <Link2 size={8} />
-                LOCAL LEDGER
-              </span>
+                {searching ? (
+                  <div style={{ padding: '20px', textAlign: 'center' }}>
+                    <Loader size={16} color="var(--primary)" className="animate-spin" style={{ margin: '0 auto 6px' }} />
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Searching...</div>
+                  </div>
+                ) : searchError ? (
+                  <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--danger)' }}>
+                    Search failed. Try again.
+                  </div>
+                ) : results.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    No matches for "{query}"
+                  </div>
+                ) : (
+                  results.map((item, i) => (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      onClick={() => handleSelectResult(item)}
+                      style={{
+                        padding: '10px 14px', cursor: 'pointer',
+                        borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none',
+                        transition: 'background 100ms',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--primary-dim)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
+                        {item.type === 'case'
+                          ? <FolderKanban size={12} color="var(--primary)" />
+                          : <FileText size={12} color="var(--success)" />}
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{item.title}</span>
+                        <span style={{
+                          fontSize: '8px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                          color: item.type === 'case' ? 'var(--primary)' : 'var(--success)',
+                          background: item.type === 'case' ? 'var(--primary-dim)' : 'var(--success-bg)',
+                          border: `1px solid ${item.type === 'case' ? 'var(--primary)' : 'var(--success)'}`,
+                          borderRadius: '9999px', padding: '1px 6px', marginLeft: 'auto', opacity: 0.9,
+                        }}>{item.type.toUpperCase()}</span>
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', marginBottom: '3px' }}>
+                        {item.firNumber}
+                      </div>
+                      {item.snippet && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                          {renderSnippet(item.snippet)}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
-          <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '1px' }}>
-            Secure Legal &amp; Investigation Document Management
-          </p>
-        </div>
+        )}
+
+        {user && (
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+            {navItems.map(({ id, label, icon: Icon }) => {
+              const isActive = activeTab === id || (id === 'cases' && activeTab === 'case-detail');
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: isActive ? 700 : 500,
+                    cursor: 'pointer',
+                    border: 'none',
+                    whiteSpace: 'nowrap',
+                    background: isActive ? 'var(--primary-dim)' : 'transparent',
+                    color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
+                    transition: 'color 150ms, background 150ms',
+                  }}
+                  onMouseEnter={e => {
+                    if (!isActive) {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-elevated)';
+                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isActive) {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)';
+                    }
+                  }}
+                >
+                  <Icon size={15} style={{ flexShrink: 0, color: isActive ? 'var(--primary)' : 'var(--text-muted)' }} />
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
+        )}
       </div>
-
-      {/* Center — Global search */}
-      {user && (
-        <div ref={searchBoxRef} style={{ position: 'relative', flex: 1, maxWidth: '420px', margin: '0 24px' }}>
-          <Search size={14} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          <input
-            type="text"
-            placeholder="Search cases & documents..."
-            value={query}
-            onChange={e => { setQuery(e.target.value); setShowResults(true); }}
-            onFocus={() => setShowResults(true)}
-            style={{
-              width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              color: 'var(--text-primary)', borderRadius: '8px', padding: '8px 12px 8px 32px',
-              fontSize: '12px', outline: 'none',
-            }}
-          />
-          {query && (
-            <button
-              onClick={() => { setQuery(''); setResults([]); }}
-              style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-            >
-              <X size={13} />
-            </button>
-          )}
-
-          {showResults && query.trim().length >= 2 && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-              background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
-              boxShadow: 'var(--shadow-modal)', maxHeight: '400px', overflowY: 'auto', zIndex: 50,
-            }}>
-              {searching ? (
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <Loader size={16} color="#3b82f6" className="animate-spin" style={{ margin: '0 auto 6px' }} />
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Searching...</div>
-                </div>
-              ) : searchError ? (
-                <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--danger)' }}>
-                  Search failed. Try again.
-                </div>
-              ) : results.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
-                  No matches for "{query}"
-                </div>
-              ) : (
-                results.map((item, i) => (
-                  <div
-                    key={`${item.type}-${item.id}`}
-                    onClick={() => handleSelectResult(item)}
-                    style={{
-                      padding: '10px 14px', cursor: 'pointer',
-                      borderBottom: i < results.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                      transition: 'background 100ms',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px' }}>
-                      {item.type === 'case'
-                        ? <FolderKanban size={12} color="#60a5fa" />
-                        : <FileText size={12} color="#34d399" />}
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>{item.title}</span>
-                      <span style={{
-                        fontSize: '8px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                        color: item.type === 'case' ? '#60a5fa' : '#34d399',
-                        background: item.type === 'case' ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.1)',
-                        border: `1px solid ${item.type === 'case' ? 'rgba(59,130,246,0.25)' : 'rgba(16,185,129,0.25)'}`,
-                        borderRadius: '9999px', padding: '1px 6px', marginLeft: 'auto',
-                      }}>{item.type.toUpperCase()}</span>
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', marginBottom: '3px' }}>
-                      {item.firNumber}
-                    </div>
-                    {item.snippet && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                        {renderSnippet(item.snippet)}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Right — User controls */}
       {user && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* User info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
               {user.name}
@@ -247,7 +264,6 @@ export const Header: React.FC<Props> = ({ onSelectCase }) => {
             </div>
           </div>
 
-          {/* Role pill */}
           {role && (
             <span style={{
               fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
@@ -259,7 +275,6 @@ export const Header: React.FC<Props> = ({ onSelectCase }) => {
             </span>
           )}
 
-          {/* Logout */}
           <button
             onClick={logout}
             title="Sign Out"
@@ -268,7 +283,7 @@ export const Header: React.FC<Props> = ({ onSelectCase }) => {
               borderRadius: '8px', color: 'var(--text-secondary)', cursor: 'pointer',
               transition: 'color 150ms, background 150ms',
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#f87171'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.1)'; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--danger)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--danger-bg)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-elevated)'; }}
           >
             <LogOut size={16} />

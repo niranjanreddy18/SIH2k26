@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ArrowLeft, FileText, Upload, ShieldCheck, Share2,
-  Box, CheckCircle2, XCircle, FileSignature, Lock,
-  RefreshCw, History, Eye, Download, Link2, Clock, Send, Layout, Users, Loader, AlertTriangle, Layers
+  ArrowLeft, FileText, Upload, ShieldCheck,
+  Box, RefreshCw, Clock, Layout, Users, Loader, AlertTriangle,
+  ChevronRight,
 } from 'lucide-react';
 import api from '../services/api';
 import { Case, Document, Evidence, AuditEvent, CaseShareItem, CaseAssignment } from '../types';
@@ -17,6 +17,7 @@ import { EvidenceModal } from '../components/EvidenceModal';
 import { EvidenceTimelineModal } from '../components/EvidenceTimelineModal';
 import { ShareModal } from '../components/ShareModal';
 import { DocumentAuditModal } from '../components/DocumentAuditModal';
+import { DocumentActionsModal } from '../components/DocumentActionsModal';
 import { PreviewModal } from '../components/PreviewModal';
 import { VersionHistoryModal } from '../components/VersionHistoryModal';
 import { NewVersionModal } from '../components/NewVersionModal';
@@ -27,28 +28,15 @@ interface Props {
   onBack: () => void;
 }
 
-type TabId = 'overview' | 'documents' | 'evidence' | 'timeline' | 'audit' | 'access';
+type TabId = 'overview' | 'documents' | 'evidence' | 'audit' | 'access';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: Layout },
   { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'evidence', label: 'Evidence', icon: Box },
-  { id: 'timeline', label: 'Timeline', icon: History },
   { id: 'audit', label: 'Audit', icon: ShieldCheck },
   { id: 'access', label: 'Access', icon: Users },
 ];
-
-const ACTION_DOT_COLORS: Record<string, string> = {
-  DOCUMENT_UPLOADED: '#3b82f6',
-  DOCUMENT_SUBMITTED: '#f59e0b',
-  DOCUMENT_APPROVED: '#10b981',
-  DOCUMENT_SIGNED: '#60a5fa',
-  DOCUMENT_LOCKED: '#a78bfa',
-  DOCUMENT_REJECTED: '#ef4444',
-  EVIDENCE_REGISTERED: '#34d399',
-  EVIDENCE_TRANSFERRED: '#c084fc',
-  default: '#6b7280',
-};
 
 export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
   const { user } = useAuth();
@@ -78,6 +66,7 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
   const [newVersionDoc, setNewVersionDoc] = useState<{ id: string; name: string; versionNo?: number } | null>(null);
   const [timelineEv, setTimelineEv] = useState<{ id: string; type: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [actionsDoc, setActionsDoc] = useState<Document | null>(null);
 
   const fetchCaseDetails = async () => {
     setLoading(true);
@@ -352,21 +341,23 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Click "Add Document" above to register an investigation file.</div>
             </div>
           ) : (
-            documents.map((doc, i) => {
-              const status = doc.currentVersion?.status || 'DRAFT';
-              return (
-                <div key={doc.id} className="animate-fade-in" style={{
-                  background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                  borderRadius: '12px', padding: '16px 18px', animationDelay: `${i * 40}ms`,
-                  transition: 'border-color 150ms',
-                }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(59,130,246,0.3)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+            documents.map((doc, i) => (
+                <div
+                  key={doc.id}
+                  className="animate-fade-in"
+                  onClick={() => setActionsDoc(doc)}
+                  style={{
+                    background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                    borderRadius: '12px', padding: '16px 18px', animationDelay: `${i * 40}ms`,
+                    transition: 'border-color 150ms, box-shadow 150ms', cursor: 'pointer',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(37,99,235,0.35)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(37,99,235,0.08)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; }}
                 >
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '16px', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'space-between' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: '#60a5fa' }}>{doc.type}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: 'var(--primary)' }}>{doc.type}</span>
                         <StatusBadge type="classification" value={doc.classification} />
                         {doc.currentVersion && <StatusBadge type="status" value={doc.currentVersion.status} />}
                         <span style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)' }}>
@@ -376,79 +367,20 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
                       <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{doc.name}</h3>
                       {doc.currentVersion?.hash && (
                         <div style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)' }}>
-                          SHA-256: <span style={{ color: '#10b981' }}>{doc.currentVersion.hash.slice(0, 16)}…</span>
+                          SHA-256: <span style={{ color: 'var(--success)' }}>{doc.currentVersion.hash.slice(0, 16)}…</span>
                         </div>
                       )}
                     </div>
-
-                    {/* Action buttons */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      <button style={btnStyle('#10b981', 'rgba(16,185,129,0.1)', 'rgba(16,185,129,0.25)')} onClick={() => setVerifyDoc({ id: doc.id, name: doc.name })}>
-                        <ShieldCheck size={12} /> Verify
-                      </button>
-                      <button style={btnStyle('#60a5fa', 'rgba(59,130,246,0.08)', 'rgba(59,130,246,0.2)')} onClick={() => setPreviewDoc({ id: doc.id, name: doc.name, mimeType: doc.currentVersion?.mimeType })}>
-                        <Eye size={12} /> Preview
-                      </button>
-                      <button style={btnStyle('#818cf8', 'rgba(99,102,241,0.1)', 'rgba(99,102,241,0.25)')} onClick={() => setLedgerDoc({ id: doc.id, name: doc.name })}>
-                        <Link2 size={12} /> Blockchain
-                      </button>
-                      <button style={btnStyle('#a78bfa', 'rgba(139,92,246,0.1)', 'rgba(139,92,246,0.25)')} onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}>
-                        <History size={12} /> Audit
-                      </button>
-                      <button style={btnStyle('#a78bfa', 'rgba(139,92,246,0.1)', 'rgba(139,92,246,0.25)')} onClick={() => setHistoryDoc({ id: doc.id, name: doc.name })}>
-                        <Layers size={12} /> Versions
-                      </button>
-                      {status !== 'SIGNED' && status !== 'LOCKED' && (
-                        <button
-                          style={btnStyle('#a78bfa', 'rgba(139,92,246,0.08)', 'rgba(139,92,246,0.2)')}
-                          onClick={() => setNewVersionDoc({ id: doc.id, name: doc.name, versionNo: doc.currentVersion?.versionNo })}
-                        >
-                          <Upload size={12} /> New Version
-                        </button>
-                      )}
-                      <button
-                        style={btnStyle('var(--text-secondary)', 'var(--bg-elevated)', 'var(--border)')}
-                        onClick={() => handleDownloadDocument(doc.id, doc.name)}
-                        disabled={downloadingId === doc.id}
-                      >
-                        {downloadingId === doc.id ? <Loader size={11} className="animate-spin" /> : <Download size={12} />}
-                        {downloadingId === doc.id ? 'Downloading...' : 'Download'}
-                      </button>
-                      <button style={btnStyle('#60a5fa', 'rgba(59,130,246,0.08)', 'rgba(59,130,246,0.2)')} onClick={() => setShareDoc({ id: doc.id, name: doc.name })}>
-                        <Share2 size={12} /> Share
-                      </button>
-
-                      {/* Workflow Transitions */}
-                      {status === 'DRAFT' && (
-                        <button style={btnStyle('#f59e0b', 'rgba(245,158,11,0.1)', 'rgba(245,158,11,0.25)')} onClick={() => handleWorkflowAction(doc.id, 'submit')}>
-                          <Send size={11} /> Submit
-                        </button>
-                      )}
-                      {isSeniorOfficer && (status === 'SUBMITTED' || status === 'UNDER_REVIEW') && (
-                        <>
-                          <button style={{ ...btnStyle('#10b981', '#10b981', '#10b981'), color: 'white', background: '#10b981', border: 'none', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'approve')}>
-                            <CheckCircle2 size={11} /> Approve
-                          </button>
-                          <button style={btnStyle('#f87171', 'rgba(239,68,68,0.1)', 'rgba(239,68,68,0.25)')} onClick={() => handleWorkflowAction(doc.id, 'reject')}>
-                            <XCircle size={11} /> Reject
-                          </button>
-                        </>
-                      )}
-                      {isSeniorOfficer && status === 'APPROVED' && (
-                        <button style={{ ...btnStyle('#3b82f6', '#3b82f6', '#3b82f6'), color: 'white', background: '#3b82f6', border: 'none', boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'sign')}>
-                          <FileSignature size={11} /> Sign
-                        </button>
-                      )}
-                      {isSeniorOfficer && status === 'SIGNED' && (
-                        <button style={{ ...btnStyle('#a78bfa', '#a78bfa', '#a78bfa'), color: 'white', background: '#a78bfa', border: 'none', boxShadow: '0 2px 8px rgba(139,92,246,0.3)' }} onClick={() => handleWorkflowAction(doc.id, 'lock')}>
-                          <Lock size={11} /> Lock
-                        </button>
-                      )}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      width: '30px', height: '30px', borderRadius: '50%',
+                      background: 'var(--primary-dim)', border: '1px solid rgba(37,99,235,0.25)', color: 'var(--primary)',
+                    }}>
+                      <ChevronRight size={15} />
                     </div>
                   </div>
                 </div>
-              );
-            })
+            ))
           )}
         </div>
       )}
@@ -498,56 +430,6 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
                 </div>
               </div>
             ))
-          )}
-        </div>
-      )}
-
-      {/* ── Timeline Tab ── */}
-      {activeTab === 'timeline' && (
-        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-          {auditEvents.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-              No timeline events yet.
-            </div>
-          ) : (
-            <div style={{ padding: '20px', position: 'relative' }}>
-              <div style={{
-                position: 'absolute', left: '36px', top: '30px', bottom: '30px', width: '2px',
-                background: 'linear-gradient(180deg, #3b82f6, #a78bfa, #10b981)',
-              }} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingLeft: '52px' }}>
-                {auditEvents.slice(0, 20).map((ev, i) => {
-                  const dotColor = ACTION_DOT_COLORS[ev.action] || ACTION_DOT_COLORS.default;
-                  return (
-                    <div key={ev.id} className="animate-slide-in" style={{ position: 'relative', animationDelay: `${i * 40}ms` }}>
-                      <div style={{
-                        position: 'absolute', left: '-40px', top: '12px',
-                        width: '14px', height: '14px', borderRadius: '50%',
-                        background: dotColor, border: '2px solid var(--bg-surface)',
-                        boxShadow: `0 0 6px ${dotColor}66`, zIndex: 1,
-                        transform: 'translateX(-50%)',
-                      }} />
-                      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>
-                          {new Date(ev.createdAt).toLocaleString('en-IN')}
-                        </span>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                          {ev.actor?.name || 'System'}
-                        </span>
-                        <span style={{
-                          fontSize: '10px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-                          color: dotColor, background: `${dotColor}15`,
-                          borderRadius: '9999px', padding: '2px 8px',
-                        }}>{ev.action}</span>
-                        {ev.targetType && (
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{ev.targetType}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           )}
         </div>
       )}
@@ -756,6 +638,23 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
       )}
 
       {/* Modals */}
+      {actionsDoc && (
+        <DocumentActionsModal
+          doc={actionsDoc}
+          isSeniorOfficer={isSeniorOfficer}
+          downloading={downloadingId === actionsDoc.id}
+          onClose={() => setActionsDoc(null)}
+          onVerify={() => setVerifyDoc({ id: actionsDoc.id, name: actionsDoc.name })}
+          onPreview={() => setPreviewDoc({ id: actionsDoc.id, name: actionsDoc.name, mimeType: actionsDoc.currentVersion?.mimeType })}
+          onBlockchain={() => setLedgerDoc({ id: actionsDoc.id, name: actionsDoc.name })}
+          onAudit={() => setAuditDoc({ id: actionsDoc.id, name: actionsDoc.name })}
+          onVersions={() => setHistoryDoc({ id: actionsDoc.id, name: actionsDoc.name })}
+          onNewVersion={() => setNewVersionDoc({ id: actionsDoc.id, name: actionsDoc.name, versionNo: actionsDoc.currentVersion?.versionNo })}
+          onDownload={() => handleDownloadDocument(actionsDoc.id, actionsDoc.name)}
+          onShare={() => setShareDoc({ id: actionsDoc.id, name: actionsDoc.name })}
+          onWorkflow={action => handleWorkflowAction(actionsDoc.id, action)}
+        />
+      )}
       {showUpload && <DocumentUploadModal caseId={caseId} onClose={() => setShowUpload(false)} onSuccess={fetchCaseDetails} />}
       {showEvidence && <EvidenceModal caseId={caseId} onClose={() => setShowEvidence(false)} onSuccess={fetchCaseDetails} />}
       {verifyDoc && <VerificationModal documentId={verifyDoc.id} documentName={verifyDoc.name} onClose={() => setVerifyDoc(null)} />}
