@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../db/pool';
 import { sendSuccess, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest, requireRole } from '../middlewares/auth';
 import { CryptoService } from '../services/crypto.service';
 import { StorageService } from '../services/storage.service';
 import { FabricService } from '../services/fabric.service';
+import { appendBlockchainRecord } from '../services/ledger.service';
 
 const router = Router();
 
@@ -54,24 +54,14 @@ router.post('/register', authenticateJWT, requireRole('SENIOR_OFFICER'), async (
 
     // ── PostgreSQL: Always write to local ledger as backup ──
     const client = await pool.connect();
-    const id = uuidv4();
     const act = action || 'DOCUMENT_REGISTERED';
-    let txReference = fabricResult.source === 'FABRIC' ? fabricResult.txId : '';
+    let txReference: string;
 
     try {
       await client.query('BEGIN');
-      const lastRow = await client.query(
-        `SELECT hash FROM blockchain_records ORDER BY created_at DESC LIMIT 1 FOR UPDATE`
-      );
-      const prevHash = lastRow.rows[0]?.hash || CryptoService.GENESIS_HASH;
-      if (!txReference) {
-        txReference = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
-      }
-
-      await client.query(
-        `INSERT INTO blockchain_records (id, ref_type, ref_id, action, hash, prev_hash, tx_reference)
-         VALUES ($1, 'DOCUMENT_VERSION', $2, $3, $4, $5, $6)`,
-        [id, targetVerId, act, targetHash, prevHash, txReference]
+      txReference = await appendBlockchainRecord(
+        client, 'DOCUMENT_VERSION', targetVerId, act, targetHash,
+        fabricResult.source === 'FABRIC' ? fabricResult.txId : undefined
       );
       await client.query('COMMIT');
     } catch (err) {
@@ -82,7 +72,6 @@ router.post('/register', authenticateJWT, requireRole('SENIOR_OFFICER'), async (
     }
 
     return sendSuccess(res, {
-      id,
       refType: 'DOCUMENT_VERSION',
       refId: targetVerId,
       action: act,
@@ -103,23 +92,12 @@ router.post('/register', authenticateJWT, requireRole('SENIOR_OFFICER'), async (
     targetHash = verRow.rows[0].hash;
 
     const client = await pool.connect();
-    let txReference = '';
-    const id = uuidv4();
     const act = action || 'DOCUMENT_REGISTERED';
+    let txReference: string;
 
     try {
       await client.query('BEGIN');
-      const lastRow = await client.query(
-        `SELECT hash FROM blockchain_records ORDER BY created_at DESC LIMIT 1 FOR UPDATE`
-      );
-      const prevHash = lastRow.rows[0]?.hash || CryptoService.GENESIS_HASH;
-      txReference = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
-
-      await client.query(
-        `INSERT INTO blockchain_records (id, ref_type, ref_id, action, hash, prev_hash, tx_reference)
-         VALUES ($1, 'DOCUMENT_VERSION', $2, $3, $4, $5, $6)`,
-        [id, targetVerId, act, targetHash, prevHash, txReference]
-      );
+      txReference = await appendBlockchainRecord(client, 'DOCUMENT_VERSION', targetVerId, act, targetHash);
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -129,7 +107,6 @@ router.post('/register', authenticateJWT, requireRole('SENIOR_OFFICER'), async (
     }
 
     return sendSuccess(res, {
-      id,
       refType: 'DOCUMENT_VERSION',
       refId: targetVerId,
       action: act,

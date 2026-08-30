@@ -6,15 +6,6 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
-        police: {
-          50: '#f0f4f8',
-          100: '#d9e2ec',
-          500: '#102a43',
-          700: '#0b1b2b',
-          900: '#060e18'
-        }
-      },
       keyframes: {
         'glow-pulse-green': {
           '0%, 100%': { boxShadow: '0 0 12px rgba(16,185,129,0.4), 0 0 40px rgba(16,185,129,0.15)' },

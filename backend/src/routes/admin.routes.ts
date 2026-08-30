@@ -6,6 +6,7 @@ import { logAuditEvent } from '../db/audit';
 import { sendSuccess, sendPaginated, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest, requireRole } from '../middlewares/auth';
 import { UserRole } from '../types';
+import { parsePagination } from '../utils/pagination';
 
 const router = Router();
 
@@ -16,9 +17,7 @@ router.use(authenticateJWT, requireRole('ADMIN'));
  * GET /admin/users — List all system users with role, status, and department
  */
 router.get('/users', async (req: AuthRequest, res: Response): Promise<any> => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(200, parseInt(req.query.limit as string) || 50);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = parsePagination(req);
 
   const countRow = await pool.query(`SELECT COUNT(*) FROM users`);
   const total = parseInt(countRow.rows[0].count);
@@ -147,11 +146,9 @@ router.patch('/users/:id/unlock', async (req: AuthRequest, res: Response): Promi
  * GET /admin/audit — System-wide audit log for administrators
  */
 router.get('/audit', async (req: AuthRequest, res: Response): Promise<any> => {
-  const page = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(200, parseInt(req.query.limit as string) || 50);
+  const { page, limit, offset } = parsePagination(req);
   const targetType = req.query.targetType as string | undefined;
   const action = req.query.action as string | undefined;
-  const offset = (page - 1) * limit;
 
   const conditions: string[] = [];
   const params: any[] = [];

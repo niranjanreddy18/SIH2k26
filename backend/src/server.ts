@@ -58,7 +58,21 @@ app.get('/health', (_req, res) => {
 // Centralized Error Handler
 app.use(errorHandler);
 
+// Fail fast on boot rather than letting every login attempt fail with a
+// confusing "invalid token" error, or (worse) silently running on a
+// hardcoded, forgeable secret.
+function validateEnv(): void {
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
+  const missing = required.filter(name => !process.env[name] || process.env[name]!.length < 16);
+  if (missing.length > 0) {
+    console.error(`❌ Missing or too-short required env var(s): ${missing.join(', ')} (must be set, 16+ chars). Refusing to start.`);
+    process.exit(1);
+  }
+}
+
 async function startServer() {
+  validateEnv();
+
   try {
     console.log('🔄 Initializing PostgreSQL database migrations...');
     await runMigrations();

@@ -173,6 +173,19 @@ export interface ShareItem {
   };
 }
 
+export interface CaseShareItem {
+  shareId: string;
+  document: { id: string; name: string };
+  recipient: { id: string; name: string };
+  createdBy: { id: string; name: string };
+  canView: boolean;
+  canDownload: boolean;
+  expiresAt: string;
+  createdAt: string;
+  revokedAt: string | null;
+  status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+}
+
 export interface AuditVerifyChainResult {
   status: 'CHAIN_INTACT' | 'CHAIN_BROKEN';
   totalEvents: number;

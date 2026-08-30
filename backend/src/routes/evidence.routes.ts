@@ -6,6 +6,8 @@ import { sendSuccess, sendPaginated, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest } from '../middlewares/auth';
 import { CryptoService } from '../services/crypto.service';
 import { FabricService } from '../services/fabric.service';
+import { hasCaseAccess } from '../utils/access';
+import { parsePagination } from '../utils/pagination';
 
 const router = Router();
 
@@ -18,6 +20,9 @@ router.post('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest,
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
   if (!caseRow.rows[0]) {
     return sendError(res, 'NOT_FOUND', `Case ${caseId} not found.`, 404);
+  }
+  if (!(await hasCaseAccess(caseId, user))) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
   }
   if (!type) {
     return sendError(res, 'VALIDATION_ERROR', 'Evidence type is required.', 400);
@@ -47,9 +52,7 @@ router.post('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest,
 // ─── GET /cases/:caseId/evidence — List evidence for a case ──────────────────
 router.get('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { caseId } = req.params;
-  const page  = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(200, parseInt(req.query.limit as string) || 50);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = parsePagination(req);
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
   if (!caseRow.rows[0]) {
@@ -118,10 +121,22 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
   }
 
   const evRow = await pool.query(
-    `SELECT id, status FROM evidence WHERE id = $1`, [id]
+    `SELECT id, status, collected_by FROM evidence WHERE id = $1`, [id]
   );
   if (!evRow.rows[0]) {
     return sendError(res, 'NOT_FOUND', `Evidence ${id} not found.`, 404);
+  }
+
+  // Current holder = whoever the most recent custody event transferred it to,
+  // or the original collecting officer if it has never been transferred.
+  const lastCustodyRow = await pool.query(
+    `SELECT to_user_id FROM evidence_custody_events WHERE evidence_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [id]
+  );
+  const currentHolderId = lastCustodyRow.rows[0]?.to_user_id || evRow.rows[0].collected_by;
+
+  if (currentHolderId !== user.id && user.role !== 'ADMIN' && user.role !== 'SENIOR_OFFICER') {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'Only the current custodian may transfer this evidence.', 403);
   }
 
   const recipientRow = await pool.query(

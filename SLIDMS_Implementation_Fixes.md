@@ -45,51 +45,53 @@
 
 ---
 
-## Tier 2 — Real security gaps (do before any non-demo use, good to mention as "known limitations" if not fixed)
+## Tier 2 — Real security gaps — ✅ DONE 2026-08-30
 
-### 2.1 No classification-tier or case-assignment enforcement
-- **Files:** `backend/src/routes/cases.routes.ts`, `documents.routes.ts`, `evidence.routes.ts`
-- **Problem:** `classification_tier` is stored but never checked against the requesting user's role/clearance on any read path. `case_assignments` is written on case creation but never queried to restrict access — any authenticated user can read/update any case regardless of assignment.
-- **Fix:** Add an authorization middleware/helper, e.g. `requireCaseAccess(caseId, user)`, that checks: (a) user is ADMIN, or (b) user is in `case_assignments` for that case, or (c) document/case classification ≤ user's clearance level (would need a clearance field on `users`, doesn't exist yet — simplest first step is assignment-based access only). Apply to `GET/PATCH /cases/:id`, document routes scoped to a case, and evidence routes scoped to a case.
+### 2.1 No classification-tier or case-assignment enforcement — ✅ FIXED
+- **Files:** `backend/src/utils/access.ts` (new), `cases.routes.ts`, `documents.routes.ts`, `evidence.routes.ts`
+- **Fix applied:** Added `hasCaseAccess(caseId, user)` — true for ADMIN, the case's creator, or anyone in `case_assignments` for it. Applied to the *write/mutate* paths only: `PATCH /cases/:id`, `POST /cases/:caseId/documents` (upload), `POST /cases/:caseId/evidence` (register), and refactored the existing tamper-demo check (Tier 0.3) to use the same helper instead of its own inline copy.
+- **Deliberate scope decision:** read paths (`GET /cases`, `GET /cases/:id`, case-scoped document/evidence lists) were left open on purpose. Restricting reads to assignees would have 403'd the FORENSIC_OFFICER persona out of every case in the seed data (they're never added to `case_assignments`), breaking case-browsing for that role with no upside — the real risk was always unauthorized *writes* (a stranger uploading into your case, changing its status, or registering evidence against it), which is what's now blocked. Classification-tier-based clearance (vs. assignment-based) was not implemented — there's no per-user clearance field in the schema, and adding one was out of scope for this pass.
+- **Verified via curl** across all four demo personas: FORENSIC_OFFICER blocked (403) from uploading/registering-evidence/PATCHing case C1 (not assigned, not creator); INVESTIGATOR allowed into C2 (case creator, no formal assignment row — confirms the creator fallback works); ADMIN always allowed; SENIOR_OFFICER (assigned to C1) allowed to PATCH it.
 
-### 2.2 Evidence custody transfer has no "current holder" check
+### 2.2 Evidence custody transfer has no "current holder" check — ✅ FIXED
 - **File:** `backend/src/routes/evidence.routes.ts`
-- **Problem:** Any authenticated user can transfer any evidence item to anyone — should be restricted to the current custodian (or ADMIN/SENIOR_OFFICER as an override).
-- **Fix:** Before creating a transfer event, look up the most recent custody event's `to_user_id` and compare to `req.user.id`; reject with 403 if mismatched and requester isn't ADMIN/SENIOR_OFFICER.
+- **Fix applied:** `POST /evidence/:id/transfer` now resolves the current holder (latest custody event's `to_user_id`, or `collected_by` if it's never been transferred) and rejects with 403 unless the requester *is* that holder, or is ADMIN/SENIOR_OFFICER.
+- **Verified via curl**: a non-holder (Forensic officer) blocked; the actual holder (Investigator, who registered it) allowed; Admin override allowed.
 
-### 2.3 Share creation has no ownership check
+### 2.3 Share creation has no ownership check — ✅ FIXED
 - **File:** `backend/src/routes/share.routes.ts`
-- **Problem:** Any authenticated user can share any document version to any recipient, not just the document's creator/case-assignee.
-- **Fix:** Check the requester is either the document's uploader, assigned to the case, or ADMIN before allowing `POST /documents/:id/share`.
+- **Fix applied:** `POST /documents/:id/share` now requires the requester be the document's uploader (`documents.created_by`) or have case access via the same `hasCaseAccess` helper, else 403.
+- **Verified via curl**: a non-uploader/non-assignee (Forensic officer) blocked from sharing the seeded witness statement; the actual uploader (Investigator) allowed.
 
-### 2.4 JWT secret handling is inconsistent and unsafe by default
-- **Files:** `backend/src/middlewares/auth.ts` (hardcoded fallback secret `'slidms_super_secret_jwt_key_2026_x8923'`), `backend/src/routes/auth.routes.ts` (`process.env.JWT_SECRET!`, no fallback, throws at runtime if unset)
-- **Problem:** If deployed without `JWT_SECRET` set, one file silently uses a known hardcoded secret (forgeable tokens), the other crashes on first login. Neither fails fast at boot.
-- **Fix:** In `server.ts` startup, validate `process.env.JWT_SECRET` is set (and reasonably long) and `process.exit(1)` with a clear error if missing — remove the hardcoded fallback from `auth.ts` entirely so there's one source of truth and no silent-insecure-default path.
+### 2.4 JWT secret handling is inconsistent and unsafe by default — ✅ FIXED
+- **Files:** `backend/src/middlewares/auth.ts`, `backend/src/server.ts`
+- **Fix applied:** Removed the hardcoded fallback secret from `auth.ts` (now `process.env.JWT_SECRET!` like `auth.routes.ts` already did). Added `validateEnv()` in `server.ts`, called first thing in `startServer()`, which checks `JWT_SECRET` and `JWT_REFRESH_SECRET` are both set and at least 16 characters — `process.exit(1)` with a clear message if not, before migrations/seed/listen even run.
+- **Verified**: backend restarted clean with the real `.env` secrets present; login still works.
 
-### 2.5 Error handler leaks raw internal messages
+### 2.5 Error handler leaks raw internal messages — ✅ FIXED
 - **File:** `backend/src/middlewares/errorHandler.ts`
-- **Problem:** Uncaught exceptions return `err.message` directly to the client (e.g. raw Postgres errors), which can leak schema/internal details.
-- **Fix:** Log the full error server-side; return a generic message to the client in production (`NODE_ENV === 'production'` check), keep detailed messages only in dev.
+- **Fix applied:** The generic-fallback branch now returns a fixed "An unexpected internal server error occurred." message when `NODE_ENV === 'production'`, and only includes `err.message` in non-production. The full error is still always `console.error`'d server-side either way.
 
 ---
 
-## Tier 3 — Code quality (no user-facing impact, do opportunistically)
+## Tier 3 — Code quality — ✅ DONE 2026-08-30
 
-### 3.1 Duplicated pagination/filter boilerplate
-- **Files:** `cases.routes.ts`, `documents.routes.ts`, `evidence.routes.ts`, `audit.routes.ts`, `admin.routes.ts`
-- **Fix:** Extract a shared helper in `backend/src/utils/` — e.g. `parsePagination(req): { page, limit, offset }` and a small query-builder helper for the repeated count-then-select pattern.
+### 3.1 Duplicated pagination/filter boilerplate — ✅ FIXED
+- **Files:** `backend/src/utils/pagination.ts` (new), `cases.routes.ts`, `documents.routes.ts`, `evidence.routes.ts`, `audit.routes.ts`, `admin.routes.ts`, `share.routes.ts`
+- **Fix applied:** Added `parsePagination(req, defaultLimit = 50): { page, limit, offset }` (clamps page ≥1, limit to [1,200]) and replaced all 9 inline copies across 6 route files with a single call each.
+- **Verified via curl**: `GET /cases?page=1&limit=2` still returns the correct page/limit/total shape.
 
-### 3.2 Duplicated blockchain hash-chaining logic
-- **Files:** `documents.routes.ts` (`appendBlockchainRecord`, chains off `hash`), `blockchain.routes.ts` (near-identical inline reimplementation)
-- **Fix:** Consolidate into a single exported function in `blockchain.routes.ts` or a new `backend/src/services/ledger.service.ts`, imported by both.
+### 3.2 Duplicated blockchain hash-chaining logic — ✅ FIXED
+- **Files:** `backend/src/services/ledger.service.ts` (new), `documents.routes.ts`, `blockchain.routes.ts`
+- **Fix applied:** Extracted `appendBlockchainRecord(client, refType, refId, action, hash, txReference?)` into a shared service (using the `SELECT ... FOR UPDATE` row-locked variant for correctness under concurrent writers). `documents.routes.ts`'s local copy was deleted; `blockchain.routes.ts`'s two near-identical inline `BEGIN/SELECT/INSERT/COMMIT` blocks in `POST /register` were both replaced with calls to the shared function (the optional `txReference` param preserves its original behavior of using a real Fabric tx id when available).
+- **Verified via curl**: `POST /blockchain/register` still creates a correctly hash-chained record end-to-end.
 
-### 3.3 Dead/no-op frontend code
-- **Files:**
-  - `CasesPage.tsx` — debounce `setTimeout(() => {}, 300)` is a no-op (empty body); filtering already happens synchronously. Remove the dead debounce ref entirely, or actually implement server-side search debouncing if `?q=` filtering should hit the API instead of filtering client-side.
-  - `Header.tsx` — notification bell button has no `onClick`. Either wire it to a real notifications feature (out of scope pre-demo) or remove the button so it doesn't look broken.
-  - `tailwind.config.js` — leftover unused `police` color palette from the pre-redesign light theme. Safe to delete.
-  - `CaseDetailPage.tsx` — "Access" tab is a placeholder with an unused `shares` state variable and no fetch. Either implement it (`GET /documents/shared-with-me` filtered by case, or a new case-scoped shares endpoint) or remove the tab until it's built.
+### 3.3 Dead/no-op frontend code — ✅ FIXED
+- **`CasesPage.tsx`** — the no-op debounce was already removed as a side effect of the Tier 1.2 error-handling pass; confirmed still clean.
+- **`Header.tsx`** — removed the non-functional notification bell button (and its now-unused `Bell` icon import) rather than build a real notifications feature out of scope.
+- **`tailwind.config.js`** — deleted the unused `police` color palette left over from the pre-redesign light theme.
+- **`CaseDetailPage.tsx` "Access" tab — fully implemented** (not just cleaned up): added `GET /cases/:id/shares` (`share.routes.ts`) returning every share grant for documents in a case — document, recipient, creator, permissions, expiry, and a computed `ACTIVE`/`EXPIRED`/`REVOKED` status. The tab now renders a real table wired to this endpoint, with a working **Revoke** button (shown only when the viewer is the share's creator or an Admin) that reuses the existing `useConfirm()`/`useToast()` patterns.
+- **Verified live in browser**: shared a document, opened its case's Access tab, saw the real share row, clicked Revoke → confirm dialog → toast → row flipped to `REVOKED` and the button disappeared. Zero console errors across a full regression pass.
 
 ---
 

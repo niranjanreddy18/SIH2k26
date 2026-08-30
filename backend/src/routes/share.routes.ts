@@ -3,6 +3,8 @@ import { pool } from '../db/pool';
 import { logAuditEvent } from '../db/audit';
 import { sendSuccess, sendPaginated, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest } from '../middlewares/auth';
+import { hasCaseAccess } from '../utils/access';
+import { parsePagination } from '../utils/pagination';
 
 const router = Router();
 
@@ -18,12 +20,17 @@ router.post('/documents/:id/share', authenticateJWT, async (req: AuthRequest, re
 
   // Fetch document + current version
   const docRow = await pool.query(
-    `SELECT d.id, d.name, d.current_version_id
+    `SELECT d.id, d.name, d.current_version_id, d.case_id, d.created_by
      FROM documents d WHERE d.id = $1`,
     [id]
   );
   if (!docRow.rows[0] || !docRow.rows[0].current_version_id) {
     return sendError(res, 'NOT_FOUND', `Document ${id} not found.`, 404);
+  }
+
+  const isUploader = docRow.rows[0].created_by === user.id;
+  if (!isUploader && !(await hasCaseAccess(docRow.rows[0].case_id, user))) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You do not have access to share this document.', 403);
   }
 
   const recipientRow = await pool.query(
@@ -59,9 +66,7 @@ router.post('/documents/:id/share', authenticateJWT, async (req: AuthRequest, re
 
 // ─── GET /documents/shared-with-me — Active shares for the current user ───────
 router.get('/documents/shared-with-me', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
-  const page  = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit = Math.min(200, parseInt(req.query.limit as string) || 20);
-  const offset = (page - 1) * limit;
+  const { page, limit, offset } = parsePagination(req, 20);
   const user  = req.user!;
 
   const countRow = await pool.query(
@@ -93,6 +98,44 @@ router.get('/documents/shared-with-me', authenticateJWT, async (req: AuthRequest
   }));
 
   return sendPaginated(res, items, page, limit, total);
+});
+
+// ─── GET /cases/:id/shares — All share grants for documents in a case ─────────
+router.get('/cases/:id/shares', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+
+  const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [id]);
+  if (!caseRow.rows[0]) {
+    return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
+  }
+
+  const rows = await pool.query(
+    `SELECT s.id, s.can_view, s.can_download, s.expires_at, s.created_at, s.revoked_at, s.created_by,
+            d.id AS doc_id, d.name AS doc_name,
+            ru.id AS recipient_id, ru.name AS recipient_name,
+            cu.id AS creator_id, cu.name AS creator_name
+     FROM shares s
+     JOIN document_versions dv ON s.document_version_id = dv.id
+     JOIN documents d ON dv.document_id = d.id
+     JOIN users ru ON s.recipient_id = ru.id
+     JOIN users cu ON s.created_by = cu.id
+     WHERE d.case_id = $1
+     ORDER BY s.created_at DESC`,
+    [id]
+  );
+
+  const items = rows.rows.map(s => ({
+    shareId: s.id,
+    document: { id: s.doc_id, name: s.doc_name },
+    recipient: { id: s.recipient_id, name: s.recipient_name },
+    createdBy: { id: s.creator_id, name: s.creator_name },
+    canView: s.can_view, canDownload: s.can_download,
+    expiresAt: s.expires_at, createdAt: s.created_at,
+    revokedAt: s.revoked_at,
+    status: s.revoked_at ? 'REVOKED' : (new Date(s.expires_at) <= new Date() ? 'EXPIRED' : 'ACTIVE'),
+  }));
+
+  return sendSuccess(res, { caseId: id, items });
 });
 
 // ─── POST /shares/:id/revoke — Revoke an active share ─────────────────────────

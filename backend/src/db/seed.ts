@@ -82,23 +82,17 @@ export async function seedDatabase(): Promise<void> {
     const DOC1  = 'bbbbbbbb-1111-1111-1111-111111111111';
     const VER1  = 'cccccccc-1111-1111-1111-111111111111';
 
-    // Write sample file to storage so verify endpoint works
+    // Write sample file to storage so verify endpoint works.
+    // Always (re)write the canonical bytes on every boot — this storage key is a
+    // fixed demo fixture that /documents/:id/tamper-demo intentionally corrupts,
+    // so seeding must be self-healing rather than trusting whatever is on disk
+    // (a stale tampered copy would otherwise get "locked in" as the registered hash).
     const sampleContent = 'SLIDMS Official Witness Statement — FIR 2026-9042. Witness: Key Informant Alpha.';
-    let storageKey1 = `doc_sample_witness_statement.txt`;
-    let hash1: string;
-
-    try {
-      // If file already exists, just compute its hash
-      const buf = await StorageService.getFile(storageKey1);
-      hash1 = CryptoService.calculateBufferHash(buf);
-    } catch {
-      // File doesn't exist yet — save it
-      const result = await StorageService.saveFileWithKey(
-        Buffer.from(sampleContent, 'utf8'),
-        storageKey1
-      );
-      hash1 = result.hash;
-    }
+    const storageKey1 = `doc_sample_witness_statement.txt`;
+    const { hash: hash1 } = await StorageService.saveFileWithKey(
+      Buffer.from(sampleContent, 'utf8'),
+      storageKey1
+    );
 
     // Insert document (without current_version_id first, resolve circular FK after)
     const docExists = await client.query(`SELECT id FROM documents WHERE id = $1`, [DOC1]);
@@ -126,6 +120,14 @@ export async function seedDatabase(): Promise<void> {
         `INSERT INTO signatures (id, document_version_id, signer_id, hash, reference)
          VALUES ($1, $2, $3, $4, 'SIG-GENESIS-001')`,
         [SIG1, VER1, U2, hash1]
+      );
+    } else {
+      // Self-heal: an earlier run may have registered this fixed-path fixture
+      // while a stale tamper-demo copy was on disk. Re-sync the registered hash
+      // to the canonical content so /verify starts every boot in a VERIFIED state.
+      await client.query(
+        `UPDATE document_versions SET hash = $1 WHERE id = $2`,
+        [hash1, VER1]
       );
     }
 

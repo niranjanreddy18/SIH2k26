@@ -5,16 +5,18 @@ import {
   RefreshCw, History, Eye, Download, Link2, Clock, Send, Layout, Users, Loader, AlertTriangle
 } from 'lucide-react';
 import api from '../services/api';
-import { Case, Document, Evidence, AuditEvent } from '../types';
+import { Case, Document, Evidence, AuditEvent, CaseShareItem } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { DocumentUploadModal } from '../components/DocumentUploadModal';
 import { VerificationModal } from '../components/VerificationModal';
 import { BlockchainLedgerModal } from '../components/BlockchainLedgerModal';
 import { EvidenceModal } from '../components/EvidenceModal';
 import { EvidenceTimelineModal } from '../components/EvidenceTimelineModal';
 import { ShareModal } from '../components/ShareModal';
+import { DocumentAuditModal } from '../components/DocumentAuditModal';
 
 interface Props {
   caseId: string;
@@ -50,17 +52,20 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
   const [documents, setDocuments]     = useState<Document[]>([]);
   const [evidenceList, setEvidenceList] = useState<Evidence[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [shares, setShares]           = useState<any[]>([]);
+  const [shares, setShares]           = useState<CaseShareItem[]>([]);
   const [activeTab, setActiveTab]     = useState<TabId>('documents');
   const [loading, setLoading]         = useState(true);
   const [loadError, setLoadError]     = useState(false);
+  const [revokingId, setRevokingId]   = useState<string | null>(null);
   const toast = useToast();
+  const confirm = useConfirm();
 
   const [showUpload, setShowUpload]     = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
   const [verifyDoc, setVerifyDoc]   = useState<{ id: string; name: string } | null>(null);
   const [ledgerDoc, setLedgerDoc]   = useState<{ id: string; name: string } | null>(null);
   const [shareDoc, setShareDoc]     = useState<{ id: string; name: string } | null>(null);
+  const [auditDoc, setAuditDoc]     = useState<{ id: string; name: string } | null>(null);
   const [timelineEv, setTimelineEv] = useState<{ id: string; type: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -68,17 +73,19 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [caseRes, docRes, evRes, auditRes] = await Promise.allSettled([
+      const [caseRes, docRes, evRes, auditRes, sharesRes] = await Promise.allSettled([
         api.get(`/cases/${caseId}`),
         api.get(`/cases/${caseId}/documents`),
         api.get(`/cases/${caseId}/evidence`),
         api.get(`/cases/${caseId}/audit`),
+        api.get(`/cases/${caseId}/shares`),
       ]);
       if (caseRes.status  === 'fulfilled' && caseRes.value.data.success)  setCaseData(caseRes.value.data.data);
       else setLoadError(true);
       if (docRes.status   === 'fulfilled' && docRes.value.data.success)   setDocuments(docRes.value.data.data.items || []);
       if (evRes.status    === 'fulfilled' && evRes.value.data.success)    setEvidenceList(evRes.value.data.data.items || []);
       if (auditRes.status === 'fulfilled' && auditRes.value.data.success) setAuditEvents(auditRes.value.data.data.items || []);
+      if (sharesRes.status === 'fulfilled' && sharesRes.value.data.success) setShares(sharesRes.value.data.data.items || []);
     } catch (err) {
       setLoadError(true);
     } finally {
@@ -96,6 +103,21 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
       if (res.data.success) { toast.success(`Document ${action}${action.endsWith('e') ? 'd' : 'ed'}.`); fetchCaseDetails(); }
     } catch (err: any) {
       toast.error(`Action failed: ${err.response?.data?.error?.message || err.message}`);
+    }
+  };
+
+  const handleRevokeShare = async (shareId: string) => {
+    const ok = await confirm({ message: 'Revoke this document access grant?', confirmLabel: 'Revoke', danger: true });
+    if (!ok) return;
+    setRevokingId(shareId);
+    try {
+      await api.post(`/shares/${shareId}/revoke`);
+      toast.success('Access revoked.');
+      await fetchCaseDetails();
+    } catch (err: any) {
+      toast.error('Revocation failed: ' + (err.response?.data?.error?.message || err.message));
+    } finally {
+      setRevokingId(null);
     }
   };
 
@@ -340,6 +362,9 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
                       <button style={btnStyle('#818cf8','rgba(99,102,241,0.1)','rgba(99,102,241,0.25)')} onClick={() => setLedgerDoc({ id: doc.id, name: doc.name })}>
                         <Link2 size={12} /> Blockchain
                       </button>
+                      <button style={btnStyle('#a78bfa','rgba(139,92,246,0.1)','rgba(139,92,246,0.25)')} onClick={() => setAuditDoc({ id: doc.id, name: doc.name })}>
+                        <History size={12} /> Audit
+                      </button>
                       <button
                         style={btnStyle('var(--text-secondary)','var(--bg-elevated)','var(--border)')}
                         onClick={() => handleDownloadDocument(doc.id, doc.name)}
@@ -548,12 +573,74 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
             padding: '14px 16px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
             borderRadius: '10px', fontSize: '12px', color: 'var(--text-muted)',
           }}>
-            📋 This tab shows documents from this case that have been shared with other officers. Revocation available to document owner, Senior Officer, or Admin.
+            📋 Documents from this case that have been shared with other officers. Revocation is available to whoever created the share, or an Admin.
           </div>
-          <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '12px' }}>
-            <Users size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
-            Share records for this case will appear here. Use the Share action on individual documents to grant access.
-          </div>
+
+          {shares.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '12px' }}>
+              <Users size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
+              No documents from this case have been shared yet. Use the Share action on a document to grant access.
+            </div>
+          ) : (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+                      {['Document', 'Shared With', 'Shared By', 'Permissions', 'Expires', 'Status', ''].map(h => (
+                        <th key={h} style={{
+                          padding: '10px 14px', fontSize: '10px', fontWeight: 700, textAlign: 'left',
+                          color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                          fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shares.map(s => {
+                      const canRevoke = s.status === 'ACTIVE' && (s.createdBy.id === user?.id || user?.role === 'ADMIN');
+                      const statusColor = s.status === 'ACTIVE' ? '#10b981' : s.status === 'EXPIRED' ? '#6b7280' : '#ef4444';
+                      return (
+                        <tr key={s.shareId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>{s.document.name}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{s.recipient.name}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)' }}>{s.createdBy.name}</td>
+                          <td style={{ padding: '10px 14px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {[s.canView && 'View', s.canDownload && 'Download'].filter(Boolean).join(' + ')}
+                          </td>
+                          <td style={{ padding: '10px 14px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap' }}>
+                            {new Date(s.expiresAt).toLocaleDateString('en-IN')}
+                          </td>
+                          <td style={{ padding: '10px 14px' }}>
+                            <span style={{
+                              fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                              color: statusColor, background: `${statusColor}20`, border: `1px solid ${statusColor}40`,
+                              borderRadius: '9999px', padding: '2px 8px',
+                            }}>{s.status}</span>
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                            {canRevoke && (
+                              <button
+                                onClick={() => handleRevokeShare(s.shareId)}
+                                disabled={revokingId === s.shareId}
+                                style={{
+                                  padding: '5px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer',
+                                  background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171',
+                                  opacity: revokingId === s.shareId ? 0.5 : 1,
+                                }}
+                              >
+                                {revokingId === s.shareId ? 'Revoking...' : 'Revoke'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -563,6 +650,7 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
       {verifyDoc && <VerificationModal documentId={verifyDoc.id} documentName={verifyDoc.name} onClose={() => setVerifyDoc(null)} />}
       {ledgerDoc && <BlockchainLedgerModal documentId={ledgerDoc.id} documentName={ledgerDoc.name} onClose={() => setLedgerDoc(null)} />}
       {shareDoc && <ShareModal documentId={shareDoc.id} documentName={shareDoc.name} onClose={() => setShareDoc(null)} onSuccess={fetchCaseDetails} />}
+      {auditDoc && <DocumentAuditModal documentId={auditDoc.id} documentName={auditDoc.name} onClose={() => setAuditDoc(null)} />}
       {timelineEv && <EvidenceTimelineModal evidenceId={timelineEv.id} evidenceType={timelineEv.type} onClose={() => setTimelineEv(null)} onCustodyUpdated={fetchCaseDetails} />}
     </div>
   );

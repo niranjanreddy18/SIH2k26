@@ -8,6 +8,9 @@ import { authenticateJWT, AuthRequest, requireRole } from '../middlewares/auth';
 import { StorageService } from '../services/storage.service';
 import { CryptoService } from '../services/crypto.service';
 import { FabricService } from '../services/fabric.service';
+import { appendBlockchainRecord } from '../services/ledger.service';
+import { hasCaseAccess } from '../utils/access';
+import { parsePagination } from '../utils/pagination';
 
 const router = Router();
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } }); // 50 MB
@@ -44,6 +47,9 @@ router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
   if (!caseRow.rows[0]) {
     return sendError(res, 'NOT_FOUND', `Case ${caseId} not found.`, 404);
+  }
+  if (!(await hasCaseAccess(caseId, user))) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
   }
   if (!name || !type) {
     return sendError(res, 'VALIDATION_ERROR', 'Document name and type are required.', 400);
@@ -107,11 +113,9 @@ router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), 
 // ─── GET /cases/:caseId/documents — List documents for a case ─────────────────
 router.get('/cases/:caseId/documents', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { caseId } = req.params;
-  const page   = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit  = Math.min(200, parseInt(req.query.limit as string) || 50);
+  const { page, limit, offset } = parsePagination(req);
   const typeFilter   = req.query.type as string | undefined;
   const statusFilter = req.query.status as string | undefined;
-  const offset = (page - 1) * limit;
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
   if (!caseRow.rows[0]) {
@@ -513,15 +517,9 @@ router.post('/documents/:id/tamper-demo', authenticateJWT, async (req: AuthReque
   const doc = await getDocumentWithVersion(id);
   if (!doc?.storage_key) return sendError(res, 'NOT_FOUND', 'Document not found.', 404);
 
-  // Only officers assigned to the document's case (or an admin) may run the tamper demo.
-  if (user.role !== 'ADMIN') {
-    const assignment = await pool.query(
-      `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,
-      [doc.case_id, user.id]
-    );
-    if (!assignment.rows[0]) {
-      return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
-    }
+  // Only officers with access to the document's case (or an admin) may run the tamper demo.
+  if (!(await hasCaseAccess(doc.case_id, user))) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
   }
 
   await StorageService.overwriteFileForTamperDemo(
@@ -534,28 +532,5 @@ router.post('/documents/:id/tamper-demo', authenticateJWT, async (req: AuthReque
     storageKey: doc.storage_key, documentId: id,
   });
 });
-
-// ─── Internal: append a blockchain record with hash-chaining ──────────────────
-async function appendBlockchainRecord(
-  client: any,
-  refType: string,
-  refId: string,
-  action: string,
-  hash: string
-): Promise<string> {
-  const lastRow = await client.query(
-    `SELECT hash FROM blockchain_records ORDER BY created_at DESC LIMIT 1`
-  );
-  const prevHash = lastRow.rows[0]?.hash || CryptoService.GENESIS_HASH;
-  const txRef    = `TX-${Math.floor(100000 + Math.random() * 900000)}`;
-  const id       = uuidv4();
-
-  await client.query(
-    `INSERT INTO blockchain_records (id, ref_type, ref_id, action, hash, prev_hash, tx_reference)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [id, refType, refId, action, hash, prevHash, txRef]
-  );
-  return txRef;
-}
 
 export default router;

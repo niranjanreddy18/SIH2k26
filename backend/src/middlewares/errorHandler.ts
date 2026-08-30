@@ -30,8 +30,11 @@ export const errorHandler = (
     return sendError(res, 'FILE_TOO_LARGE', 'File size exceeds allowed maximum limit.', 400);
   }
 
-  // Generic fallback
-  const message = err.message || 'An unexpected internal server error occurred.';
+  // Generic fallback — don't leak internal details (raw DB errors, stack traces, etc.)
+  // to the client outside development.
+  const message = process.env.NODE_ENV === 'production'
+    ? 'An unexpected internal server error occurred.'
+    : (err.message || 'An unexpected internal server error occurred.');
   return sendError(res, 'INTERNAL_SERVER_ERROR', message, 500);
 };
 

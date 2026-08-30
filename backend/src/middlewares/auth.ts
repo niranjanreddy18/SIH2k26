@@ -15,7 +15,9 @@ export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'slidms_super_secret_jwt_key_2026_x8923';
+// No fallback secret here by design — server.ts validates JWT_SECRET is set
+// (and refuses to start otherwise) before any request can reach this middleware.
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunction): any => {
   const authHeader = req.headers.authorization;

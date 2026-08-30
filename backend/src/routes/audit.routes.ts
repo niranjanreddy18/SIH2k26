@@ -3,18 +3,17 @@ import { pool } from '../db/pool';
 import { sendPaginated, sendSuccess, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest } from '../middlewares/auth';
 import { CryptoService } from '../services/crypto.service';
+import { parsePagination } from '../utils/pagination';
 
 const router = Router();
 
 // ─── GET /documents/:id/audit ─────────────────────────────────────────────────
 router.get('/documents/:id/audit', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
-  const page   = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit  = Math.min(200, parseInt(req.query.limit as string) || 50);
+  const { page, limit, offset } = parsePagination(req);
   const action = req.query.action as string | undefined;
   const from   = req.query.from   as string | undefined;
   const to     = req.query.to     as string | undefined;
-  const offset = (page - 1) * limit;
 
   const docRow = await pool.query(`SELECT id FROM documents WHERE id = $1`, [id]);
   if (!docRow.rows[0]) {
@@ -66,12 +65,10 @@ router.get('/documents/:id/audit', authenticateJWT, async (req: AuthRequest, res
 // ─── GET /cases/:id/audit ─────────────────────────────────────────────────────
 router.get('/cases/:id/audit', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
-  const page   = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit  = Math.min(200, parseInt(req.query.limit as string) || 50);
+  const { page, limit, offset } = parsePagination(req);
   const action = req.query.action as string | undefined;
   const from   = req.query.from   as string | undefined;
   const to     = req.query.to     as string | undefined;
-  const offset = (page - 1) * limit;
 
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [id]);
   if (!caseRow.rows[0]) {

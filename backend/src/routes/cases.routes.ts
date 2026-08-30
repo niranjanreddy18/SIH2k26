@@ -4,6 +4,8 @@ import { pool } from '../db/pool';
 import { logAuditEvent } from '../db/audit';
 import { sendSuccess, sendPaginated, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest } from '../middlewares/auth';
+import { hasCaseAccess } from '../utils/access';
+import { parsePagination } from '../utils/pagination';
 
 const router = Router();
 
@@ -46,11 +48,9 @@ router.post('/', authenticateJWT, async (req: AuthRequest, res: Response): Promi
 
 // ─── GET /cases?page=&limit=&status=&classification= ──────────────────────────
 router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
-  const page   = Math.max(1, parseInt(req.query.page as string) || 1);
-  const limit  = Math.min(200, parseInt(req.query.limit as string) || 20);
+  const { page, limit, offset } = parsePagination(req, 20);
   const status = req.query.status as string | undefined;
   const cls    = req.query.classification as string | undefined;
-  const offset = (page - 1) * limit;
 
   const conditions: string[] = [];
   const params: any[]        = [];
@@ -154,6 +154,10 @@ router.patch('/:id', authenticateJWT, async (req: AuthRequest, res: Response): P
   const existing = await pool.query(`SELECT id FROM cases WHERE id = $1`, [id]);
   if (!existing.rows[0]) {
     return sendError(res, 'NOT_FOUND', `Case ${id} not found.`, 404);
+  }
+
+  if (!(await hasCaseAccess(id, user))) {
+    return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
   }
 
   const updates: string[] = [];

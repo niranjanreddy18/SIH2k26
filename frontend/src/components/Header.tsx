@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, LogOut, Link2, Bell } from 'lucide-react';
+import { ShieldCheck, LogOut, Link2 } from 'lucide-react';
 import api from '../services/api';
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -88,14 +88,6 @@ export const Header: React.FC = () => {
       {/* Right — User controls */}
       {user && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* Notification bell */}
-          <button style={{
-            padding: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-            borderRadius: '8px', color: 'var(--text-secondary)', cursor: 'pointer',
-          }}>
-            <Bell size={16} />
-          </button>
-
           {/* User info */}
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
