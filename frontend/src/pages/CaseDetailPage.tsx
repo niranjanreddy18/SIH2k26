@@ -17,6 +17,7 @@ import { EvidenceModal } from '../components/EvidenceModal';
 import { EvidenceTimelineModal } from '../components/EvidenceTimelineModal';
 import { ShareModal } from '../components/ShareModal';
 import { DocumentAuditModal } from '../components/DocumentAuditModal';
+import { PreviewModal } from '../components/PreviewModal';
 
 interface Props {
   caseId: string;
@@ -66,6 +67,7 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
   const [ledgerDoc, setLedgerDoc]   = useState<{ id: string; name: string } | null>(null);
   const [shareDoc, setShareDoc]     = useState<{ id: string; name: string } | null>(null);
   const [auditDoc, setAuditDoc]     = useState<{ id: string; name: string } | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{ id: string; name: string; mimeType?: string } | null>(null);
   const [timelineEv, setTimelineEv] = useState<{ id: string; type: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -359,6 +361,9 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
                       <button style={btnStyle('#10b981','rgba(16,185,129,0.1)','rgba(16,185,129,0.25)')} onClick={() => setVerifyDoc({ id: doc.id, name: doc.name })}>
                         <ShieldCheck size={12} /> Verify
                       </button>
+                      <button style={btnStyle('#60a5fa','rgba(59,130,246,0.08)','rgba(59,130,246,0.2)')} onClick={() => setPreviewDoc({ id: doc.id, name: doc.name, mimeType: doc.currentVersion?.mimeType })}>
+                        <Eye size={12} /> Preview
+                      </button>
                       <button style={btnStyle('#818cf8','rgba(99,102,241,0.1)','rgba(99,102,241,0.25)')} onClick={() => setLedgerDoc({ id: doc.id, name: doc.name })}>
                         <Link2 size={12} /> Blockchain
                       </button>
@@ -651,6 +656,7 @@ export const CaseDetailPage: React.FC<Props> = ({ caseId, onBack }) => {
       {ledgerDoc && <BlockchainLedgerModal documentId={ledgerDoc.id} documentName={ledgerDoc.name} onClose={() => setLedgerDoc(null)} />}
       {shareDoc && <ShareModal documentId={shareDoc.id} documentName={shareDoc.name} onClose={() => setShareDoc(null)} onSuccess={fetchCaseDetails} />}
       {auditDoc && <DocumentAuditModal documentId={auditDoc.id} documentName={auditDoc.name} onClose={() => setAuditDoc(null)} />}
+      {previewDoc && <PreviewModal documentId={previewDoc.id} documentName={previewDoc.name} mimeType={previewDoc.mimeType} onClose={() => setPreviewDoc(null)} />}
       {timelineEv && <EvidenceTimelineModal evidenceId={timelineEv.id} evidenceType={timelineEv.type} onClose={() => setTimelineEv(null)} onCustodyUpdated={fetchCaseDetails} />}
     </div>
   );

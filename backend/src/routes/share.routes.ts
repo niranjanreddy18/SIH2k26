@@ -78,7 +78,7 @@ router.get('/documents/shared-with-me', authenticateJWT, async (req: AuthRequest
 
   const rows = await pool.query(
     `SELECT s.id, s.can_view, s.can_download, s.expires_at, s.created_at,
-            d.id AS doc_id, d.name AS doc_name, d.type AS doc_type,
+            d.id AS doc_id, d.name AS doc_name, d.type AS doc_type, dv.mime_type,
             c.id AS case_id, c.fir_number
      FROM shares s
      JOIN document_versions dv ON s.document_version_id = dv.id
@@ -93,7 +93,7 @@ router.get('/documents/shared-with-me', authenticateJWT, async (req: AuthRequest
   const items = rows.rows.map(s => ({
     shareId: s.id, canView: s.can_view, canDownload: s.can_download,
     expiresAt: s.expires_at, createdAt: s.created_at,
-    document: { id: s.doc_id, name: s.doc_name, type: s.doc_type },
+    document: { id: s.doc_id, name: s.doc_name, type: s.doc_type, mimeType: s.mime_type },
     case: { id: s.case_id, firNumber: s.fir_number },
   }));
 

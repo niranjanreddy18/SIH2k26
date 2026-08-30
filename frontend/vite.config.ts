@@ -15,6 +15,7 @@ export default defineConfig({
       '/audit': 'http://localhost:5000',
       '/shares': 'http://localhost:5000',
       '/admin': 'http://localhost:5000',
+      '/users': 'http://localhost:5000',
       '/health': 'http://localhost:5000'
     }
   }

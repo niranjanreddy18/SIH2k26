@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, FileText, Download, Clock, AlertCircle, RefreshCw, Loader, AlertTriangle } from 'lucide-react';
+import { Share2, FileText, Download, Clock, AlertCircle, RefreshCw, Loader, AlertTriangle, Eye } from 'lucide-react';
 import api from '../services/api';
 import { ShareItem } from '../types';
 import { useToast } from '../context/ToastContext';
-import { useConfirm } from '../context/ConfirmContext';
+import { PreviewModal } from '../components/PreviewModal';
 
 interface Props {
   onSelectCase?: (caseId: string) => void;
@@ -29,8 +29,8 @@ export const SharedPage: React.FC<Props> = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{ id: string; name: string; mimeType?: string } | null>(null);
   const toast = useToast();
-  const confirm = useConfirm();
 
   const fetchSharedDocs = async () => {
     setLoading(true);
@@ -60,18 +60,6 @@ export const SharedPage: React.FC<Props> = () => {
       toast.error('Download failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setDownloadingId(null);
-    }
-  };
-
-  const handleRevoke = async (shareId: string) => {
-    const ok = await confirm({ message: 'Revoke this document access grant?', confirmLabel: 'Revoke', danger: true });
-    if (!ok) return;
-    try {
-      await api.post(`/shares/${shareId}/revoke`);
-      toast.success('Access revoked.');
-      await fetchSharedDocs();
-    } catch (err: any) {
-      toast.error('Revocation failed: ' + (err.response?.data?.error?.message || err.message));
     }
   };
 
@@ -196,7 +184,19 @@ export const SharedPage: React.FC<Props> = () => {
                   {/* Action buttons */}
                   {!isExpired && docId && (
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                      {(share.canView || share.canDownload) && (
+                      {share.canView && (
+                        <button
+                          onClick={() => setPreviewDoc({ id: docId, name: docName, mimeType: share.document?.mimeType })}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px',
+                            borderRadius: '7px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                            background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: '#60a5fa',
+                          }}
+                        >
+                          <Eye size={11} /> View
+                        </button>
+                      )}
+                      {share.canDownload && (
                         <button
                           onClick={() => handleDownload(docId, docName)}
                           disabled={downloadingId === docId}
@@ -211,18 +211,9 @@ export const SharedPage: React.FC<Props> = () => {
                             ? <Loader size={11} className="animate-spin" />
                             : <Download size={11} />
                           }
-                          {share.canDownload ? 'Download' : 'View'}
+                          Download
                         </button>
                       )}
-                      <button
-                        onClick={() => handleRevoke(share.shareId)}
-                        style={{
-                          padding: '7px 12px', borderRadius: '7px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-                          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171',
-                        }}
-                      >
-                        Revoke
-                      </button>
                     </div>
                   )}
                 </div>
@@ -231,6 +222,8 @@ export const SharedPage: React.FC<Props> = () => {
           })}
         </div>
       )}
+
+      {previewDoc && <PreviewModal documentId={previewDoc.id} documentName={previewDoc.name} mimeType={previewDoc.mimeType} onClose={() => setPreviewDoc(null)} />}
     </div>
   );
 };

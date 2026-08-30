@@ -166,6 +166,7 @@ export interface ShareItem {
     id: string;
     name: string;
     type?: DocumentType;
+    mimeType?: string;
   };
   case: {
     id: string;

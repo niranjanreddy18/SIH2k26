@@ -249,6 +249,45 @@ router.get('/documents/:id/download', authenticateJWT, async (req: AuthRequest, 
   }
 });
 
+// ─── GET /documents/:id/preview — Stream file inline for in-app viewing ───────
+// Same access model as /download but gated on the (previously unenforced)
+// share.can_view flag rather than can_download — a view-only share grant now
+// actually means something.
+router.get('/documents/:id/preview', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const doc = await getDocumentWithVersion(id);
+
+  if (!doc || !doc.storage_key) {
+    return sendError(res, 'NOT_FOUND', `Document ${id} or its file not found.`, 404);
+  }
+
+  const user = req.user!;
+  const isOwnerOrSenior = user.role === 'SENIOR_OFFICER' || user.role === 'ADMIN';
+  if (!isOwnerOrSenior) {
+    const isCreator = doc.created_by_id === user.id;
+    const shareRow = await pool.query(
+      `SELECT id FROM shares
+       WHERE document_version_id = $1 AND recipient_id = $2
+         AND can_view = true AND revoked_at IS NULL AND expires_at > now()`,
+      [doc.ver_id, user.id]
+    );
+    if (!isCreator && !shareRow.rows[0]) {
+      return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You do not have permission to preview this document.', 403);
+    }
+  }
+
+  try {
+    const fileBuffer = await StorageService.getFile(doc.storage_key);
+    await logAuditEvent(user.id, 'DOCUMENT_PREVIEWED', 'DOCUMENT', id);
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${doc.name}"`);
+    res.setHeader('Content-Length', fileBuffer.length.toString());
+    return res.send(fileBuffer);
+  } catch (err: any) {
+    return sendError(res, 'NOT_FOUND', `File not available in storage: ${err.message}`, 404);
+  }
+});
+
 // ─── POST /documents/:id/versions — Create new version ───────────────────────
 router.post('/documents/:id/versions', authenticateJWT, upload.single('file'), async (req: AuthRequest, res: Response): Promise<any> => {
   const { id }    = req.params;
