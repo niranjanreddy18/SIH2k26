@@ -153,6 +153,7 @@ export interface BlockchainRecord {
   prevHash: string;
   txReference: string;
   createdAt: string;
+  source?: 'FABRIC' | 'POSTGRESQL';
 }
 
 export interface ShareItem {

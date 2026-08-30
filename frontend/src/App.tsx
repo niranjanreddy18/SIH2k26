@@ -19,8 +19,13 @@ export const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-mono text-xs">
-        Initializing SLIDMS Cryptographic Security Session...
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>
+            Initializing SLIDMS Cryptographic Security Session...
+          </p>
+        </div>
       </div>
     );
   }
@@ -40,7 +45,7 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       <Header />
 
       <div className="flex flex-1">
@@ -52,42 +57,44 @@ export const AppContent: React.FC = () => {
           }}
         />
 
-        <main className="flex-1 p-6 overflow-y-auto max-w-7xl mx-auto w-full">
-          {activeTab === 'dashboard' && (
-            <DashboardPage
-              onSelectCase={handleSelectCase}
-              onOpenNewCase={() => setShowNewCaseModal(true)}
-            />
-          )}
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="max-w-7xl mx-auto w-full">
+            {activeTab === 'dashboard' && (
+              <DashboardPage
+                onSelectCase={handleSelectCase}
+                onOpenNewCase={() => setShowNewCaseModal(true)}
+              />
+            )}
 
-          {activeTab === 'cases' && (
-            <CasesPage
-              onSelectCase={handleSelectCase}
-              onOpenNewCase={() => setShowNewCaseModal(true)}
-            />
-          )}
+            {activeTab === 'cases' && (
+              <CasesPage
+                onSelectCase={handleSelectCase}
+                onOpenNewCase={() => setShowNewCaseModal(true)}
+              />
+            )}
 
-          {activeTab === 'case-detail' && selectedCaseId && (
-            <CaseDetailPage
-              caseId={selectedCaseId}
-              onBack={handleBackToCases}
-            />
-          )}
+            {activeTab === 'case-detail' && selectedCaseId && (
+              <CaseDetailPage
+                caseId={selectedCaseId}
+                onBack={handleBackToCases}
+              />
+            )}
 
-          {activeTab === 'shared' && (
-            <SharedPage onSelectCase={handleSelectCase} />
-          )}
+            {activeTab === 'shared' && (
+              <SharedPage onSelectCase={handleSelectCase} />
+            )}
 
-          {activeTab === 'audit' && <AuditPage />}
+            {activeTab === 'audit' && <AuditPage />}
 
-          {activeTab === 'admin' && <AdminPage />}
+            {activeTab === 'admin' && <AdminPage />}
+          </div>
         </main>
       </div>
 
       {showNewCaseModal && (
         <NewCaseModal
           onClose={() => setShowNewCaseModal(false)}
-          onSuccess={() => setActiveTab('cases')}
+          onSuccess={() => { setShowNewCaseModal(false); setActiveTab('cases'); }}
         />
       )}
     </div>

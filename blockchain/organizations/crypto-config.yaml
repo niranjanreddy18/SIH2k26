@@ -1,0 +1,31 @@
+OrdererOrgs:
+  - Name: Orderer
+    Domain: slidms.gov.in
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+
+PeerOrgs:
+  - Name: PoliceDept
+    Domain: police.slidms.gov.in
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1
+
+  - Name: ForensicLab
+    Domain: forensic.slidms.gov.in
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1
+
+  - Name: Judiciary
+    Domain: judiciary.slidms.gov.in
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+    Users:
+      Count: 1

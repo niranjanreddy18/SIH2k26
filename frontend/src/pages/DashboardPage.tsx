@@ -1,144 +1,309 @@
 import React, { useState, useEffect } from 'react';
-import { FolderKanban, FileCheck2, Clock, ShieldCheck, Plus, ArrowUpRight } from 'lucide-react';
+import {
+  FolderKanban, FileCheck2, Clock, ShieldCheck, Plus,
+  ArrowUpRight, Link2, Building2, TrendingUp, AlertTriangle
+} from 'lucide-react';
 import api from '../services/api';
 import { Case } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
   onSelectCase: (caseId: string) => void;
   onOpenNewCase: () => void;
 }
 
+const STAT_CARD = {
+  display: 'flex', alignItems: 'center', gap: '16px',
+  padding: '20px', borderRadius: '12px',
+  background: 'var(--bg-surface)', border: '1px solid var(--border)',
+  cursor: 'default', transition: 'all 150ms',
+} as React.CSSProperties;
+
+function Skeleton() {
+  return <div className="skeleton" style={{ height: '80px', borderRadius: '12px' }} />;
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export const DashboardPage: React.FC<Props> = ({ onSelectCase, onOpenNewCase }) => {
+  const { user } = useAuth();
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [blockchainStatus, setBlockchainStatus] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchCases = async () => {
-      try {
-        const res = await api.get('/cases?limit=5');
-        if (res.data.success) {
-          setCases(res.data.data.items || []);
-        }
-      } catch (err) {
-        console.error('Failed to load dashboard cases:', err);
-      } finally {
-        setLoading(false);
+  const fetchData = async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const [casesRes, bcRes] = await Promise.allSettled([
+        api.get('/cases?limit=5'),
+        api.get('/blockchain/status'),
+      ]);
+      if (casesRes.status === 'fulfilled' && casesRes.value.data.success) {
+        setCases(casesRes.value.data.data.items || []);
+      } else {
+        setLoadError(true);
       }
-    };
-    fetchCases();
-  }, []);
+      if (bcRes.status === 'fulfilled' && bcRes.value.data.success) {
+        setBlockchainStatus(bcRes.value.data.data || null);
+      }
+    } catch (err) {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const totalDocs     = cases.reduce((s, c) => s + (c.documentCount  || 0), 0);
+  const pendingApprv  = cases.reduce((s, c) => s + (c.pendingApprovals || 0), 0);
+  const totalEvidence = cases.reduce((s, c) => s + (c.evidenceCount   || 0), 0);
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Quick Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+      {/* Greeting Banner */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+        gap: '16px', padding: '24px',
+        background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(139,92,246,0.05) 100%)',
+        border: '1px solid var(--border)', borderRadius: '14px',
+      }}>
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900">Investigation Dashboard</h2>
-          <p className="text-xs text-slate-500 mt-1">Real-time status of legal case files, evidence custody, and cryptographic audit records.</p>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+            {getGreeting()}, {user?.name?.split(' ')[0] || 'Officer'} 👋
+          </h2>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
         </div>
         <button
           onClick={onOpenNewCase}
-          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shrink-0 shadow-md shadow-blue-600/20"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 18px', borderRadius: '8px',
+            background: '#3b82f6', color: 'white', fontSize: '13px', fontWeight: 700,
+            cursor: 'pointer', border: 'none',
+            boxShadow: '0 4px 20px rgba(59,130,246,0.3)',
+            transition: 'background 150ms',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#2563eb')}
+          onMouseLeave={e => (e.currentTarget.style.background = '#3b82f6')}
         >
-          <Plus className="w-4 h-4" /> Register New Case
+          <Plus size={15} /> Register New Case
         </button>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-xs">
-          <div className="p-3 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl">
-            <FolderKanban className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">{cases.length}</div>
-            <div className="text-xs text-slate-500 font-medium">Active Cases</div>
-          </div>
-        </div>
+      {/* Stat Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+        {loading ? (
+          [0,1,2,3].map(i => <Skeleton key={i} />)
+        ) : (
+          <>
+            {[
+              { icon: FolderKanban, label: 'Active Cases',     value: cases.length, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.2)'  },
+              { icon: Clock,        label: 'Pending Approvals',value: pendingApprv,  color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.2)'  },
+              { icon: FileCheck2,   label: 'Hashed Documents', value: totalDocs,     color: '#10b981', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.2)'  },
+              { icon: ShieldCheck,  label: 'Cryptographic Integrity', value: '100%', color: '#a78bfa', bg: 'rgba(139,92,246,0.12)', border: 'rgba(139,92,246,0.2)'  },
+            ].map(({ icon: Icon, label, value, color, bg, border }, i) => (
+              <div
+                key={i}
+                className="stat-card animate-fade-in-up"
+                style={{ ...STAT_CARD, animationDelay: `${i * 60}ms` }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 24px ${border.replace('0.2', '0.25')}`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; }}
+              >
+                <div style={{ padding: '10px', background: bg, border: `1px solid ${border}`, borderRadius: '10px' }}>
+                  <Icon size={22} color={color} />
+                </div>
+                <div>
+                  <div className="animate-count-up" style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
+                    {value}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px', fontWeight: 500 }}>
+                    {label}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-xs">
-          <div className="p-3 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl">
-            <Clock className="w-6 h-6" />
-          </div>
+      {/* Blockchain Network Card */}
+      <div style={{
+        background: 'linear-gradient(135deg, #0d1526, #111827)',
+        border: '1px solid rgba(59,130,246,0.2)',
+        borderRadius: '14px',
+        padding: '20px 24px',
+      }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div>
-            <div className="text-2xl font-black text-slate-900">
-              {cases.reduce((sum, c) => sum + (c.pendingApprovals || 0), 0)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <Link2 size={18} color="#3b82f6" />
+              <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                Hyperledger Fabric Permissioned Ledger
+              </span>
+              {blockchainStatus?.connected ? (
+                <span style={{
+                  fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                  color: '#10b981', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)',
+                  borderRadius: '9999px', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: '5px',
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite', display: 'inline-block' }} />
+                  NETWORK LIVE
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                  color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
+                  borderRadius: '9999px', padding: '3px 10px',
+                }}>
+                  DUAL-WRITE FALLBACK
+                </span>
+              )}
             </div>
-            <div className="text-xs text-slate-500 font-medium">Pending Approvals</div>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Multi-org SHA-256 immutable ledger anchoring document hashes and evidence custody across law enforcement agencies.
+            </p>
           </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-xs">
-          <div className="p-3 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl">
-            <FileCheck2 className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">
-              {cases.reduce((sum, c) => sum + (c.documentCount || 0), 0)}
-            </div>
-            <div className="text-xs text-slate-500 font-medium">Hashed Documents</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-xs">
-          <div className="p-3 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-xl">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-2xl font-black text-slate-900">100%</div>
-            <div className="text-xs text-slate-500 font-medium">Cryptographic Integrity</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {[
+              { icon: Building2, label: 'Orgs', value: 'Police · Forensic · Judiciary' },
+              { icon: TrendingUp, label: 'Channel', value: blockchainStatus?.channel || 'slidms-channel' },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: '8px', padding: '8px 14px',
+                display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px',
+                fontFamily: 'JetBrains Mono, monospace',
+              }}>
+                <Icon size={13} color="#6b7280" />
+                <span style={{ color: 'var(--text-muted)' }}>{label}:</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Case List Summary Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm">Recent Active Case Files</h3>
+      {/* Main Grid: Recent Cases + Pending Approvals */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+
+        {/* Recent Cases */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{
+            padding: '14px 20px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Recent Active Case Files</h3>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+              Last 5 cases
+            </span>
+          </div>
+
+          {loading ? (
+            <div style={{ padding: '20px' }}>
+              {[0,1,2].map(i => <div key={i} className="skeleton" style={{ height: '40px', marginBottom: '8px' }} />)}
+            </div>
+          ) : loadError ? (
+            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+              <AlertTriangle size={24} color="var(--danger)" style={{ margin: '0 auto 10px' }} />
+              <div style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '10px' }}>Could not load dashboard data.</div>
+              <button
+                onClick={fetchData}
+                style={{
+                  padding: '7px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 700,
+                  background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', cursor: 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : cases.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+              No active cases registered yet.
+            </div>
+          ) : (
+            <div>
+              {cases.map((c, i) => (
+                <div
+                  key={c.id}
+                  className="animate-fade-in"
+                  style={{
+                    padding: '14px 20px',
+                    borderBottom: i < cases.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    cursor: 'pointer', transition: 'background 150ms',
+                    animationDelay: `${i * 50}ms`,
+                    borderLeft: c.classification === 'HIGHLY_CONFIDENTIAL' ? '3px solid #ef4444' : '3px solid transparent',
+                  }}
+                  onClick={() => onSelectCase(c.id)}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: '#60a5fa' }}>
+                        {c.firNumber}
+                      </span>
+                      <StatusBadge type="status" value={c.status} />
+                      <StatusBadge type="classification" value={c.classification} />
+                    </div>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.title}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'JetBrains Mono, monospace' }}>
+                      Docs: {c.documentCount || 0}  ·  Evidence: {c.evidenceCount || 0}
+                    </div>
+                  </div>
+                  <ArrowUpRight size={14} color="var(--text-muted)" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="p-8 text-center text-xs text-slate-400">Loading cases...</div>
-        ) : cases.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400">No active cases registered yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-500 uppercase font-mono text-[11px] border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3.5">FIR Number</th>
-                  <th className="px-6 py-3.5">Case Title</th>
-                  <th className="px-6 py-3.5">Status</th>
-                  <th className="px-6 py-3.5">Classification</th>
-                  <th className="px-6 py-3.5 text-center">Docs</th>
-                  <th className="px-6 py-3.5 text-center">Evidence</th>
-                  <th className="px-6 py-3.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-sans">
-                {cases.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-blue-600">{c.firNumber}</td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{c.title}</td>
-                    <td className="px-6 py-4"><StatusBadge type="status" value={c.status} /></td>
-                    <td className="px-6 py-4"><StatusBadge type="classification" value={c.classification} /></td>
-                    <td className="px-6 py-4 text-center font-mono font-bold text-slate-700">{c.documentCount || 0}</td>
-                    <td className="px-6 py-4 text-center font-mono font-bold text-slate-700">{c.evidenceCount || 0}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => onSelectCase(c.id)}
-                        className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 font-bold text-xs transition-all inline-flex items-center gap-1 border border-slate-200 shadow-xs"
-                      >
-                        View Case <ArrowUpRight className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Pending Approvals panel */}
+        <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Pending Approvals</h3>
           </div>
-        )}
+          <div style={{ padding: '20px' }}>
+            {loading ? (
+              [0,1].map(i => <div key={i} className="skeleton" style={{ height: '50px', marginBottom: '8px' }} />)
+            ) : pendingApprv === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <div style={{ fontSize: '28px', marginBottom: '8px' }}>✅</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No pending approvals</div>
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: '20px', gap: '8px',
+              }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#f59e0b' }}>{pendingApprv}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>documents awaiting approval</div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px',
+                  padding: '6px 12px', borderRadius: '8px',
+                  background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)',
+                }}>
+                  <AlertTriangle size={12} color="#f59e0b" />
+                  <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>Action Required</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

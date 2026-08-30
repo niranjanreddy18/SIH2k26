@@ -5,6 +5,7 @@ import { logAuditEvent } from '../db/audit';
 import { sendSuccess, sendPaginated, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest } from '../middlewares/auth';
 import { CryptoService } from '../services/crypto.service';
+import { FabricService } from '../services/fabric.service';
 
 const router = Router();
 
@@ -31,6 +32,10 @@ router.post('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest,
   );
 
   await logAuditEvent(user.id, 'EVIDENCE_REGISTERED', 'EVIDENCE', id);
+
+  // ── Fabric: Register evidence on-chain (async, non-blocking) ──
+  FabricService.registerEvidence(id, caseId, type, user.id, user.name)
+    .catch(err => console.error('Fabric registerEvidence background error:', err.message));
 
   const e = row.rows[0];
   return sendSuccess(res, {
@@ -153,6 +158,17 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
   }
 
   await logAuditEvent(user.id, 'EVIDENCE_TRANSFERRED', 'EVIDENCE', id);
+
+  // ── Fabric: Record custody transfer on-chain ──
+  FabricService.recordCustodyTransfer(
+    id,
+    user.id,
+    user.name,
+    toUserId,
+    recipientRow.rows[0].name,
+    reason || 'Custody transfer',
+    custodyHash
+  ).catch(err => console.error('Fabric recordCustodyTransfer background error:', err.message));
 
   return sendSuccess(res, {
     evidenceId: id, action: 'TRANSFERRED',

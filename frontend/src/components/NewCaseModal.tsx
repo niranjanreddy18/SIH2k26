@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Plus, FolderKanban } from 'lucide-react';
+import { X, Plus, FolderKanban, Loader } from 'lucide-react';
 import api from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 interface Props {
   onClose: () => void;
@@ -14,85 +15,80 @@ export const NewCaseModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [crimeType, setCrimeType] = useState('Cyber Crime & Fraud');
   const [classification, setClassification] = useState('INTERNAL');
   const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firNumber || !title) return;
-
     setSubmitting(true);
     try {
-      const res = await api.post('/cases', {
-        firNumber,
-        title,
-        description,
-        crimeType,
-        classification
-      });
-      if (res.data.success) {
-        onSuccess();
-        onClose();
-      }
+      const res = await api.post('/cases', { firNumber, title, description, crimeType, classification });
+      if (res.data.success) { toast.success('Case file registered.'); onSuccess(); onClose(); }
     } catch (err: any) {
-      alert('Failed to create case: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Failed to create case: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setSubmitting(false);
     }
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+    color: 'var(--text-primary)', borderRadius: '8px', padding: '9px 12px',
+    fontSize: '12px', outline: 'none',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)',
+    textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px',
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2 text-blue-600 font-bold text-lg">
-            <FolderKanban className="w-5 h-5" /> Register New Case File
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: '16px', width: '100%', maxWidth: '520px',
+        boxShadow: 'var(--shadow-modal)',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--bg-elevated)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ padding: '7px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '8px' }}>
+              <FolderKanban size={16} color="#3b82f6" />
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Register New Case File</div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm">
+        <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">FIR Number *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. FIR-2026-9042"
-              value={firNumber}
-              onChange={(e) => setFirNumber(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 font-mono"
-            />
+            <label style={labelStyle}>FIR Number *</label>
+            <input type="text" required placeholder="e.g. FIR-2026-9042" value={firNumber} onChange={e => setFirNumber(e.target.value)} style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace' }} />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Case Title *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Financial Fraud & Cyber Heist"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
-            />
+            <label style={labelStyle}>Case Title *</label>
+            <input type="text" required placeholder="e.g. Financial Fraud & Cyber Heist" value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Crime Type</label>
-              <input
-                type="text"
-                value={crimeType}
-                onChange={(e) => setCrimeType(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500"
-              />
+              <label style={labelStyle}>Crime Type</label>
+              <input type="text" value={crimeType} onChange={e => setCrimeType(e.target.value)} style={inputStyle} />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Classification Tier</label>
-              <select
-                value={classification}
-                onChange={(e) => setClassification(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500 font-medium"
-              >
+              <label style={labelStyle}>Classification Tier</label>
+              <select value={classification} onChange={e => setClassification(e.target.value)} style={inputStyle}>
                 <option value="PUBLIC">PUBLIC</option>
                 <option value="INTERNAL">INTERNAL</option>
                 <option value="CONFIDENTIAL">CONFIDENTIAL</option>
@@ -102,31 +98,29 @@ export const NewCaseModal: React.FC<Props> = ({ onClose, onSuccess }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Case Summary / Description</label>
+            <label style={labelStyle}>Case Summary / Description</label>
             <textarea
               rows={3}
               placeholder="Enter brief details regarding FIR allegations, station, and scope..."
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 resize-none"
+              onChange={e => setDescription(e.target.value)}
+              style={{ ...inputStyle, resize: 'none', lineHeight: '1.5' }}
             />
           </div>
 
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
-            >
-              <Plus className="w-4 h-4" />
-              {submitting ? 'Creating...' : 'Register Case File'}
+          <div style={{ display: 'flex', gap: '10px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+            <button type="button" onClick={onClose} style={{
+              flex: 1, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer',
+            }}>Cancel</button>
+            <button type="submit" disabled={submitting} style={{
+              flex: 2, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+              background: submitting ? 'rgba(59,130,246,0.5)' : '#3b82f6', color: 'white',
+              border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              boxShadow: submitting ? 'none' : '0 4px 16px rgba(59,130,246,0.25)',
+            }}>
+              {submitting ? <><Loader size={13} className="animate-spin" /> Creating...</> : <><Plus size={13} /> Register Case File</>}
             </button>
           </div>
         </form>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Box, ArrowRight, ShieldCheck, UserCheck, Calendar, Send } from 'lucide-react';
+import { X, Box, ArrowRight, UserCheck, Calendar, Send, Loader, AlertTriangle, RefreshCw } from 'lucide-react';
 import api from '../services/api';
-import { EvidenceCustodyEvent } from '../types';
+import { EvidenceCustodyEvent, User } from '../types';
+import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 interface Props {
   evidenceId: string;
@@ -10,36 +12,51 @@ interface Props {
   onCustodyUpdated?: () => void;
 }
 
+// Alternating blue/violet dot colors per spec §9
+const DOT_COLORS = ['#3b82f6', '#a78bfa', '#10b981', '#60a5fa', '#c084fc', '#34d399'];
+
 export const EvidenceTimelineModal: React.FC<Props> = ({
-  evidenceId,
-  evidenceType,
-  onClose,
-  onCustodyUpdated
+  evidenceId, evidenceType, onClose, onCustodyUpdated
 }) => {
+  const { user: currentUser } = useAuth();
+  const toast = useToast();
   const [events, setEvents] = useState<EvidenceCustodyEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [officers, setOfficers] = useState<User[]>([]);
   const [showTransferForm, setShowTransferForm] = useState(false);
-  const [toUserId, setToUserId] = useState('33333333-3333-3333-3333-333333333333');
+  const [toUserId, setToUserId] = useState('');
   const [reason, setReason] = useState('');
   const [transferring, setTransferring] = useState(false);
 
   const fetchCustodyEvents = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await api.get(`/evidence/${evidenceId}/custody`);
-      if (res.data.success) {
-        setEvents(res.data.data.items || []);
-      }
+      if (res.data.success) setEvents(res.data.data.items || []);
     } catch (err: any) {
-      console.error('Failed to fetch custody:', err);
+      setLoadError(true);
+      toast.error('Failed to load custody timeline: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchCustodyEvents();
-  }, [evidenceId]);
+  const fetchOfficers = async () => {
+    try {
+      const res = await api.get('/users');
+      if (res.data.success) {
+        const list: User[] = (res.data.data || []).filter((u: User) => u.id !== currentUser?.id);
+        setOfficers(list);
+        if (list.length > 0) setToUserId(list[0].id);
+      }
+    } catch (err: any) {
+      toast.error('Failed to load officer directory: ' + (err.response?.data?.error?.message || err.message));
+    }
+  };
+
+  useEffect(() => { fetchCustodyEvents(); fetchOfficers(); }, [evidenceId]);
 
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,157 +68,267 @@ export const EvidenceTimelineModal: React.FC<Props> = ({
         reason: reason || 'Forensic lab analysis transfer'
       });
       if (res.data.success) {
+        toast.success('Custody transferred.');
         setShowTransferForm(false);
         setReason('');
         await fetchCustodyEvents();
-        if (onCustodyUpdated) onCustodyUpdated();
+        onCustodyUpdated?.();
       }
     } catch (err: any) {
-      alert('Transfer failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Transfer failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setTransferring(false);
     }
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+    color: 'var(--text-primary)', borderRadius: '8px', padding: '9px 12px',
+    fontSize: '12px', outline: 'none',
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: '16px', width: '100%', maxWidth: '640px',
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        boxShadow: 'var(--shadow-modal)',
+      }}>
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700">
-              <Box className="w-5 h-5" />
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--bg-elevated)', flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ padding: '8px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '8px' }}>
+              <Box size={16} color="#10b981" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Chain of Custody Provenance Timeline</h3>
-              <p className="text-xs text-slate-500 font-mono mt-0.5">{evidenceType}</p>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>
+                Chain of Custody Provenance Timeline
+              </h3>
+              <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', marginTop: '3px' }}>
+                {evidenceType}
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <X size={18} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
-          {/* Transfer Custody Button & Panel */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Transfer Panel */}
+          <div style={{
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px',
+          }}>
             {!showTransferForm ? (
-              <div className="flex items-center justify-between gap-4">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Transfer Custody Action</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Officially hand over physical or digital evidence to another authorized department officer.</p>
+                  <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>Transfer Custody Action</h4>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Officially hand over evidence to another authorized department officer.
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowTransferForm(true)}
-                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 shadow-md shadow-emerald-600/20"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '8px 14px', borderRadius: '8px', flexShrink: 0,
+                    background: '#10b981', color: 'white', fontSize: '11px', fontWeight: 700,
+                    cursor: 'pointer', border: 'none',
+                    boxShadow: '0 4px 12px rgba(16,185,129,0.25)',
+                  }}
                 >
-                  <Send className="w-3.5 h-3.5" /> Transfer Custody
+                  <Send size={12} /> Transfer Custody
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleTransferSubmit} className="space-y-3 text-xs">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <span className="font-bold text-emerald-800">Initiate Evidence Transfer</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowTransferForm(false)}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
+              <form onSubmit={handleTransferSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#34d399' }}>Initiate Evidence Transfer</span>
+                  <button type="button" onClick={() => setShowTransferForm(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px' }}>
                     Cancel
                   </button>
                 </div>
-
                 <div>
-                  <label className="block text-[11px] text-slate-700 mb-1 font-bold">Recipient Officer *</label>
-                  <select
-                    value={toUserId}
-                    onChange={(e) => setToUserId(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500 font-medium"
-                  >
-                    <option value="33333333-3333-3333-3333-333333333333">Dr. Ananya Roy (Forensic Officer - CFSL)</option>
-                    <option value="22222222-2222-2222-2222-222222222222">ACP Rajeshwar Sharma (Senior Officer)</option>
-                    <option value="11111111-1111-1111-1111-111111111111">Inspector Vikram Singh (Cyber Crime Cell)</option>
-                    <option value="44444444-4444-4444-4444-444444444444">Admin Desk Officer (Evidence Vault Custodian)</option>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }}>
+                    Recipient Officer *
+                  </label>
+                  <select value={toUserId} onChange={e => setToUserId(e.target.value)} style={{ ...inputStyle }} disabled={officers.length === 0}>
+                    {officers.length === 0 && <option>Loading officer directory...</option>}
+                    {officers.map(o => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} — {o.role.replace('_', ' ')}{o.department ? ` (${o.department})` : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
-
                 <div>
-                  <label className="block text-[11px] text-slate-700 mb-1 font-bold">Reason for Handover / Examination Memo</label>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }}>
+                    Reason / Examination Memo
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. Forensic memory dump recovery & drive analysis"
                     value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500"
+                    onChange={e => setReason(e.target.value)}
+                    style={inputStyle}
                   />
                 </div>
-
-                <div className="flex justify-end gap-2 pt-1">
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button
                     type="submit"
                     disabled={transferring}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '8px 16px', borderRadius: '8px',
+                      background: '#10b981', color: 'white', fontSize: '12px', fontWeight: 700,
+                      cursor: 'pointer', border: 'none', opacity: transferring ? 0.6 : 1,
+                    }}
                   >
-                    {transferring ? 'Recording...' : 'Confirm Handover & Sign'}
+                    {transferring ? <><Loader size={12} className="animate-spin" /> Recording...</> : 'Confirm Handover & Sign'}
                   </button>
                 </div>
               </form>
             )}
           </div>
 
-          {/* Custody Timeline Nodes */}
+          {/* Custody Timeline */}
           {loading ? (
-            <div className="py-8 text-center text-xs text-slate-400">Loading custody log...</div>
+            <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', fontSize: '12px' }}>
+              <Loader size={20} color="#3b82f6" className="animate-spin" style={{ margin: '0 auto 8px' }} />
+              Loading chain of custody...
+            </div>
+          ) : loadError ? (
+            <div style={{
+              textAlign: 'center', padding: '32px',
+              color: 'var(--danger)', fontSize: '12px',
+              background: 'var(--danger-bg)', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.3)',
+            }}>
+              <AlertTriangle size={24} style={{ margin: '0 auto 10px' }} />
+              Could not load the custody timeline.
+              <button
+                onClick={fetchCustodyEvents}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', margin: '12px auto 0',
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 700,
+                  background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={12} /> Retry
+              </button>
+            </div>
           ) : events.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-400">No custody transfers recorded yet. Initial registration logged.</div>
+            <div style={{
+              textAlign: 'center', padding: '32px',
+              color: 'var(--text-muted)', fontSize: '12px',
+              background: 'var(--bg-elevated)', borderRadius: '10px', border: '1px solid var(--border)',
+            }}>
+              <Box size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
+              No custody transfers recorded yet. Initial registration logged.
+            </div>
           ) : (
-            <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-gradient-to-b before:from-emerald-500 before:via-blue-500 before:to-slate-300">
-              {events.map((ev, idx) => (
-                <div key={idx} className="relative group">
-                  <div className="absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-emerald-600 shadow-md shadow-emerald-500/20 group-hover:scale-125 transition-transform" />
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 hover:border-slate-300 transition-colors shadow-xs">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {ev.action}
-                      </span>
-                      <span className="text-slate-400 font-mono flex items-center gap-1 text-[11px]">
-                        <Calendar className="w-3 h-3" /> {new Date(ev.createdAt).toLocaleString()}
-                      </span>
-                    </div>
+            <div style={{ position: 'relative' }}>
+              {/* Vertical line */}
+              <div style={{
+                position: 'absolute', left: '14px', top: '14px', bottom: '14px',
+                width: '2px',
+                background: 'linear-gradient(180deg, #3b82f6 0%, #a78bfa 50%, #10b981 100%)',
+                borderRadius: '2px',
+              }} />
 
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-slate-700 pt-1">
-                      {ev.from && (
-                        <div className="flex items-center gap-1.5 font-medium">
-                          <UserCheck className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="text-slate-500">From:</span> {ev.from.name}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingLeft: '36px' }}>
+                {events.map((ev, idx) => {
+                  const dotColor = DOT_COLORS[idx % DOT_COLORS.length];
+                  return (
+                    <div key={idx} className="animate-slide-in" style={{ position: 'relative', animationDelay: `${idx * 80}ms` }}>
+                      {/* Dot */}
+                      <div style={{
+                        position: 'absolute', left: '-29px', top: '14px',
+                        width: '16px', height: '16px', borderRadius: '50%',
+                        background: dotColor, border: `2px solid var(--bg-surface)`,
+                        boxShadow: `0 0 8px ${dotColor}66`,
+                        transform: 'translateX(-50%)',
+                        zIndex: 1,
+                      }} />
+
+                      {/* Card */}
+                      <div style={{
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: '10px',
+                        padding: '14px', transition: 'border-color 150ms',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                          <span style={{
+                            fontSize: '10px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                            letterSpacing: '0.05em', color: dotColor,
+                            background: `${dotColor}15`, border: `1px solid ${dotColor}30`,
+                            borderRadius: '9999px', padding: '3px 9px',
+                          }}>
+                            {ev.action}
+                          </span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'JetBrains Mono, monospace' }}>
+                            <Calendar size={11} /> {new Date(ev.createdAt).toLocaleString('en-IN')}
+                          </span>
                         </div>
-                      )}
-                      {ev.from && <ArrowRight className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />}
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-slate-500">To:</span> <span className="text-emerald-800 font-bold">{ev.to.name}</span>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '12px', fontWeight: 600 }}>
+                          {ev.from && (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                                <UserCheck size={13} color="var(--text-muted)" />
+                                <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>From:</span>
+                                {ev.from.name}
+                              </div>
+                              <ArrowRight size={13} color="var(--text-muted)" />
+                            </>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: dotColor }}>
+                            <UserCheck size={13} color={dotColor} />
+                            <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>To:</span>
+                            <span style={{ color: dotColor, fontWeight: 700 }}>{ev.to.name}</span>
+                          </div>
+                        </div>
+
+                        {ev.reason && (
+                          <div style={{
+                            marginTop: '10px', padding: '8px 10px', borderRadius: '6px',
+                            background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)',
+                            fontSize: '11px', color: 'var(--text-secondary)',
+                          }}>
+                            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Memo: </span>
+                            {ev.reason}
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {ev.reason && (
-                      <div className="text-xs text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 font-sans">
-                        <span className="text-slate-400 font-medium">Memo: </span>
-                        {ev.reason}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <div style={{
+          padding: '12px 20px', borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'flex-end',
+          background: 'var(--bg-elevated)', flexShrink: 0,
+        }}>
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold"
+            style={{
+              padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              color: 'var(--text-secondary)', cursor: 'pointer',
+            }}
           >
             Close
           </button>

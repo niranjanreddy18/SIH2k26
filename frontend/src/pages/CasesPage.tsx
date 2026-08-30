@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, ArrowUpRight } from 'lucide-react';
+import { Search, Plus, FolderOpen, FileText, FlaskConical, Scale, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import { Case } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -9,139 +9,237 @@ interface Props {
   onOpenNewCase: () => void;
 }
 
+const CRIME_ICONS: Record<string, React.ReactNode> = {
+  CYBERCRIME:  <FlaskConical size={18} color="#60a5fa" />,
+  FRAUD:       <FileText size={18} color="#f59e0b" />,
+  MURDER:      <Scale size={18} color="#f87171" />,
+};
+
 export const CasesPage: React.FC<Props> = ({ onSelectCase, onOpenNewCase }) => {
   const [cases, setCases] = useState<Case[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [classificationFilter, setClassificationFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
-    const fetchCases = async () => {
-      setLoading(true);
-      try {
-        let url = '/cases?limit=50';
-        if (statusFilter) url += `&status=${statusFilter}`;
-        if (classificationFilter) url += `&classification=${classificationFilter}`;
-        const res = await api.get(url);
-        if (res.data.success) {
-          setCases(res.data.data.items || []);
-        }
-      } catch (err) {
-        console.error('Failed to load cases:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCases();
-  }, [statusFilter, classificationFilter]);
+  const fetchCases = async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      let url = '/cases?limit=50';
+      if (statusFilter)         url += `&status=${statusFilter}`;
+      if (classificationFilter) url += `&classification=${classificationFilter}`;
+      const res = await api.get(url);
+      if (res.data.success) setCases(res.data.data.items || []);
+    } catch (err) {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filteredCases = cases.filter(
-    (c) =>
-      c.firNumber.toLowerCase().includes(search.toLowerCase()) ||
-      c.title.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => { fetchCases(); }, [statusFilter, classificationFilter]);
+
+  const filtered = cases.filter(c =>
+    c.firNumber.toLowerCase().includes(search.toLowerCase()) ||
+    c.title.toLowerCase().includes(search.toLowerCase()) ||
+    (c.crimeType || '').toLowerCase().includes(search.toLowerCase())
   );
 
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+    color: 'var(--text-primary)', borderRadius: '8px', padding: '8px 12px',
+    fontSize: '12px', outline: 'none',
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900">Case File Repository</h2>
-          <p className="text-xs text-slate-500 mt-1">Search, filter, and inspect registered investigation files.</p>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>Case File Repository</h2>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+            Search, filter, and inspect registered investigation files.
+          </p>
         </div>
         <button
           onClick={onOpenNewCase}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-md shadow-blue-600/20"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '7px',
+            padding: '9px 16px', borderRadius: '8px',
+            background: '#3b82f6', color: 'white', fontSize: '12px', fontWeight: 700,
+            cursor: 'pointer', border: 'none',
+            boxShadow: '0 4px 16px rgba(59,130,246,0.25)', transition: 'background 150ms',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#2563eb')}
+          onMouseLeave={e => (e.currentTarget.style.background = '#3b82f6')}
         >
-          <Plus className="w-4 h-4" /> Register New Case
+          <Plus size={14} /> Register New Case
         </button>
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col md:flex-row gap-4 shadow-xs">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center',
+        padding: '14px 16px',
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
+      }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+          <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search by FIR Number or Case Title..."
+            placeholder="Search by FIR, title, crime type..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            onChange={e => setSearch(e.target.value)}
+            style={{ ...inputStyle, paddingLeft: '32px', width: '100%' }}
           />
         </div>
-
-        <div className="flex items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700 focus:bg-white focus:outline-none focus:border-blue-500 font-medium"
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={inputStyle}>
+          <option value="">All Statuses</option>
+          <option value="OPEN">OPEN</option>
+          <option value="UNDER_INVESTIGATION">UNDER INVESTIGATION</option>
+          <option value="UNDER_REVIEW">UNDER REVIEW</option>
+          <option value="CHARGESHEET_PREPARED">CHARGESHEET PREPARED</option>
+          <option value="COURT_SUBMITTED">COURT SUBMITTED</option>
+          <option value="CLOSED">CLOSED</option>
+        </select>
+        <select value={classificationFilter} onChange={e => setClassificationFilter(e.target.value)} style={inputStyle}>
+          <option value="">All Classifications</option>
+          <option value="PUBLIC">PUBLIC</option>
+          <option value="INTERNAL">INTERNAL</option>
+          <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+          <option value="HIGHLY_CONFIDENTIAL">HIGHLY CONFIDENTIAL</option>
+        </select>
+        {(search || statusFilter || classificationFilter) && (
+          <button
+            onClick={() => { setSearch(''); setStatusFilter(''); setClassificationFilter(''); }}
+            style={{
+              fontSize: '11px', fontWeight: 600, color: '#f87171',
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
+              borderRadius: '8px', padding: '8px 12px', cursor: 'pointer',
+            }}
           >
-            <option value="">All Statuses</option>
-            <option value="OPEN">OPEN</option>
-            <option value="UNDER_INVESTIGATION">UNDER INVESTIGATION</option>
-            <option value="UNDER_REVIEW">UNDER REVIEW</option>
-            <option value="CHARGESHEET_PREPARED">CHARGESHEET PREPARED</option>
-            <option value="CLOSED">CLOSED</option>
-          </select>
-
-          <select
-            value={classificationFilter}
-            onChange={(e) => setClassificationFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700 focus:bg-white focus:outline-none focus:border-blue-500 font-medium"
-          >
-            <option value="">All Classifications</option>
-            <option value="PUBLIC">PUBLIC</option>
-            <option value="INTERNAL">INTERNAL</option>
-            <option value="CONFIDENTIAL">CONFIDENTIAL</option>
-            <option value="HIGHLY_CONFIDENTIAL">HIGHLY CONFIDENTIAL</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-        {loading ? (
-          <div className="p-12 text-center text-xs text-slate-400">Loading case repository...</div>
-        ) : filteredCases.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400">No cases matched the search filter criteria.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-500 uppercase font-mono text-[11px] border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3.5">FIR Number</th>
-                  <th className="px-6 py-3.5">Case Title</th>
-                  <th className="px-6 py-3.5">Status</th>
-                  <th className="px-6 py-3.5">Classification</th>
-                  <th className="px-6 py-3.5 text-center">Docs</th>
-                  <th className="px-6 py-3.5 text-center">Evidence</th>
-                  <th className="px-6 py-3.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-sans">
-                {filteredCases.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-blue-600">{c.firNumber}</td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{c.title}</td>
-                    <td className="px-6 py-4"><StatusBadge type="status" value={c.status} /></td>
-                    <td className="px-6 py-4"><StatusBadge type="classification" value={c.classification} /></td>
-                    <td className="px-6 py-4 text-center font-mono font-bold text-slate-700">{c.documentCount || 0}</td>
-                    <td className="px-6 py-4 text-center font-mono font-bold text-slate-700">{c.evidenceCount || 0}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => onSelectCase(c.id)}
-                        className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 font-bold text-xs transition-all inline-flex items-center gap-1 border border-slate-200 shadow-xs"
-                      >
-                        Inspect Case <ArrowUpRight className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            Clear filters
+          </button>
         )}
       </div>
+
+      {/* Cases Grid */}
+      {loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+          {[0,1,2,3,4,5].map(i => (
+            <div key={i} className="skeleton" style={{ height: '140px', borderRadius: '12px' }} />
+          ))}
+        </div>
+      ) : loadError ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 20px',
+          background: 'var(--danger-bg)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px',
+        }}>
+          <AlertTriangle size={32} color="var(--danger)" style={{ marginBottom: '12px' }} />
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--danger)', marginBottom: '10px' }}>Could not load case files</div>
+          <button
+            onClick={fetchCases}
+            style={{
+              padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+              background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 20px',
+          background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px',
+        }}>
+          <FolderOpen size={40} color="var(--text-muted)" style={{ opacity: 0.4, marginBottom: '12px' }} />
+          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>No cases found</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            Try adjusting your search or filter criteria.
+          </div>
+          {(search || statusFilter || classificationFilter) && (
+            <button
+              onClick={() => { setSearch(''); setStatusFilter(''); setClassificationFilter(''); }}
+              style={{
+                padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+                cursor: 'pointer',
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '14px' }}>
+          {filtered.map((c, i) => {
+            const isHighlyConf = c.classification === 'HIGHLY_CONFIDENTIAL';
+            return (
+              <div
+                key={c.id}
+                className={`animate-fade-in-up ${isHighlyConf ? 'animate-pulse-border-red' : ''}`}
+                onClick={() => onSelectCase(c.id)}
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: `1px solid ${isHighlyConf ? '#ef4444' : 'var(--border)'}`,
+                  borderLeft: `4px solid ${isHighlyConf ? '#ef4444' : 'rgba(59,130,246,0.3)'}`,
+                  borderRadius: '12px', padding: '18px',
+                  cursor: 'pointer', transition: 'all 200ms',
+                  animationDelay: `${i * 40}ms`,
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = isHighlyConf
+                    ? '0 8px 24px rgba(239,68,68,0.15)' : '0 8px 24px rgba(59,130,246,0.12)';
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                }}
+              >
+                {/* Top row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#60a5fa', fontFamily: 'JetBrains Mono, monospace' }}>
+                    {c.firNumber}
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <StatusBadge type="status" value={c.status} />
+                    <StatusBadge type="classification" value={c.classification} />
+                  </div>
+                </div>
+
+                {/* Title */}
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px', lineHeight: 1.3 }}>
+                  {c.title}
+                </div>
+
+                {c.crimeType && (
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+                    {c.crimeType}
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div style={{
+                  display: 'flex', gap: '12px',
+                  paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)',
+                  fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                }}>
+                  <span>📄 {c.documentCount || 0} docs</span>
+                  <span>🔬 {c.evidenceCount || 0} evidence</span>
+                  {(c.pendingApprovals || 0) > 0 && (
+                    <span style={{ color: '#f59e0b', fontWeight: 700 }}>⏳ {c.pendingApprovals} pending</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

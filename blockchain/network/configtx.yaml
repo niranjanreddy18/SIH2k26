@@ -1,0 +1,174 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# SLIDMS Fabric Network — Channel & Organization Configuration
+# configtx.yaml — Defines 3 organizations and the SLIDMS channel
+# ═══════════════════════════════════════════════════════════════════════════════
+
+Organizations:
+  - &OrdererOrg
+    Name: OrdererOrg
+    ID: OrdererMSP
+    MSPDir: ../organizations/ordererOrganizations/slidms.gov.in/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+    OrdererEndpoints:
+      - orderer.slidms.gov.in:7050
+
+  - &PoliceDeptOrg
+    Name: PoliceDeptMSP
+    ID: PoliceDeptMSP
+    MSPDir: ../organizations/peerOrganizations/police.slidms.gov.in/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('PoliceDeptMSP.admin', 'PoliceDeptMSP.peer', 'PoliceDeptMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('PoliceDeptMSP.admin', 'PoliceDeptMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('PoliceDeptMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('PoliceDeptMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.police.slidms.gov.in
+        Port: 7051
+
+  - &ForensicLabOrg
+    Name: ForensicLabMSP
+    ID: ForensicLabMSP
+    MSPDir: ../organizations/peerOrganizations/forensic.slidms.gov.in/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('ForensicLabMSP.admin', 'ForensicLabMSP.peer', 'ForensicLabMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('ForensicLabMSP.admin', 'ForensicLabMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('ForensicLabMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('ForensicLabMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.forensic.slidms.gov.in
+        Port: 9051
+
+  - &JudiciaryOrg
+    Name: JudiciaryMSP
+    ID: JudiciaryMSP
+    MSPDir: ../organizations/peerOrganizations/judiciary.slidms.gov.in/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('JudiciaryMSP.admin', 'JudiciaryMSP.peer', 'JudiciaryMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('JudiciaryMSP.admin', 'JudiciaryMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('JudiciaryMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('JudiciaryMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.judiciary.slidms.gov.in
+        Port: 11051
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_0: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  Addresses:
+    - orderer.slidms.gov.in:7050
+  EtcdRaft:
+    Consenters:
+      - Host: orderer.slidms.gov.in
+        Port: 7050
+        ClientTLSCert: ../organizations/ordererOrganizations/slidms.gov.in/orderers/orderer.slidms.gov.in/tls/server.crt
+        ServerTLSCert: ../organizations/ordererOrganizations/slidms.gov.in/orderers/orderer.slidms.gov.in/tls/server.crt
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 10
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 512 KB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+  Capabilities:
+    <<: *OrdererCapabilities
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  SLIDMSGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *PoliceDeptOrg
+        - *ForensicLabOrg
+        - *JudiciaryOrg

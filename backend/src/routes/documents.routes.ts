@@ -7,6 +7,7 @@ import { sendSuccess, sendPaginated, sendError } from '../utils/response';
 import { authenticateJWT, AuthRequest, requireRole } from '../middlewares/auth';
 import { StorageService } from '../services/storage.service';
 import { CryptoService } from '../services/crypto.service';
+import { FabricService } from '../services/fabric.service';
 
 const router = Router();
 const upload = multer({ limits: { fileSize: 50 * 1024 * 1024 } }); // 50 MB
@@ -90,6 +91,12 @@ router.post('/cases/:caseId/documents', authenticateJWT, upload.single('file'), 
   }
 
   await logAuditEvent(user.id, 'DOCUMENT_UPLOADED', 'DOCUMENT', docId);
+
+  // ── Fabric: Register document on-chain (async, non-blocking) ──
+  FabricService.registerDocument(
+    docId, caseId, name, type, hash, user.id, user.name,
+    classification || 'INTERNAL', 1
+  ).catch(err => console.error('Fabric registerDocument background error:', err.message));
 
   return sendSuccess(res, {
     id: docId, caseId, name, type, classification: classification || 'INTERNAL',
@@ -344,6 +351,11 @@ router.post('/documents/:id/submit', authenticateJWT, async (req: AuthRequest, r
     `UPDATE document_versions SET status = 'SUBMITTED'::version_status WHERE id = $1`, [doc.ver_id]
   );
   await logAuditEvent(req.user!.id, 'DOCUMENT_SUBMITTED', 'DOCUMENT', id);
+
+  // ── Fabric: Update status on-chain ──
+  FabricService.updateDocumentStatus(id, 'SUBMITTED', req.user!.id, req.user!.name, doc.hash)
+    .catch(err => console.error('Fabric updateStatus error:', err.message));
+
   return sendSuccess(res, { status: 'SUBMITTED' });
 });
 
@@ -372,6 +384,10 @@ router.post('/documents/:id/approve', authenticateJWT, requireRole('SENIOR_OFFIC
     [doc.ver_id, user.id, comment || null]
   );
   await logAuditEvent(user.id, 'DOCUMENT_APPROVED', 'DOCUMENT', id);
+
+  // ── Fabric: Update status on-chain ──
+  FabricService.updateDocumentStatus(id, 'APPROVED', user.id, user.name, doc.hash)
+    .catch(err => console.error('Fabric updateStatus error:', err.message));
 
   // Blockchain record for DOCUMENT_APPROVED (§25)
   const client = await pool.connect();
@@ -442,6 +458,10 @@ router.post('/documents/:id/sign', authenticateJWT, requireRole('SENIOR_OFFICER'
 
   await logAuditEvent(user.id, 'DOCUMENT_SIGNED', 'DOCUMENT', id);
 
+  // ── Fabric: Update status on-chain ──
+  FabricService.updateDocumentStatus(id, 'SIGNED', user.id, user.name, doc.hash)
+    .catch(err => console.error('Fabric updateStatus error:', err.message));
+
   return sendSuccess(res, {
     status: 'SIGNED',
     signature: {
@@ -478,14 +498,31 @@ router.post('/documents/:id/lock', authenticateJWT, requireRole('SENIOR_OFFICER'
   }
 
   await logAuditEvent(user.id, 'DOCUMENT_LOCKED', 'DOCUMENT', id);
+
+  // ── Fabric: Update status on-chain ──
+  FabricService.updateDocumentStatus(id, 'LOCKED', user.id, user.name, doc.hash)
+    .catch(err => console.error('Fabric updateStatus error:', err.message));
+
   return sendSuccess(res, { status: 'LOCKED', txReference: txRef });
 });
 
 // ─── POST /documents/:id/tamper-demo — Demo: corrupt file bytes ───────────────
 router.post('/documents/:id/tamper-demo', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
+  const user = req.user!;
   const doc = await getDocumentWithVersion(id);
   if (!doc?.storage_key) return sendError(res, 'NOT_FOUND', 'Document not found.', 404);
+
+  // Only officers assigned to the document's case (or an admin) may run the tamper demo.
+  if (user.role !== 'ADMIN') {
+    const assignment = await pool.query(
+      `SELECT 1 FROM case_assignments WHERE case_id = $1 AND user_id = $2`,
+      [doc.case_id, user.id]
+    );
+    if (!assignment.rows[0]) {
+      return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'You are not assigned to this case.', 403);
+    }
+  }
 
   await StorageService.overwriteFileForTamperDemo(
     doc.storage_key,

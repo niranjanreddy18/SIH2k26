@@ -82,3 +82,17 @@ desktop.ini
 .agents/plugins/
 scratch/
 .system_generated/
+
+# ─── Hyperledger Fabric: downloaded binaries (fetched by install-fabric.sh) ──
+blockchain/bin/
+blockchain/builders/
+
+# ─── Hyperledger Fabric: generated crypto material — NEVER commit private keys
+blockchain/organizations/fabric-ca/
+blockchain/organizations/ordererOrganizations/
+blockchain/organizations/peerOrganizations/
+
+# ─── Hyperledger Fabric: generated channel artifacts & chaincode packages ───
+blockchain/channel-artifacts/
+blockchain/chaincode/dist/
+*.tar.gz

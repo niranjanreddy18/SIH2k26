@@ -1,0 +1,24 @@
+{
+  "name": "slidms-chaincode",
+  "version": "1.0.0",
+  "description": "SLIDMS Hyperledger Fabric Chaincode — Document anchoring & custody tracking",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fabric-contract-api": "^2.5.0",
+    "fabric-shim": "^2.5.0",
+    "json-stringify-deterministic": "^1.0.12",
+    "sort-keys-recursive": "^2.1.10"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

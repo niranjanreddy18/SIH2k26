@@ -1,34 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, FileText, Download, Clock, CheckCircle2, AlertCircle, RefreshCw, XCircle } from 'lucide-react';
+import { Share2, FileText, Download, Clock, AlertCircle, RefreshCw, Loader, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import { ShareItem } from '../types';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface Props {
   onSelectCase?: (caseId: string) => void;
 }
 
-export const SharedPage: React.FC<Props> = ({ onSelectCase }) => {
+function getShareState(share: ShareItem): 'active' | 'expiring' | 'expired' {
+  if (!share.expiresAt) return 'active';
+  const expiresMs = new Date(share.expiresAt).getTime();
+  const now = Date.now();
+  if (now > expiresMs) return 'expired';
+  if (expiresMs - now < 24 * 60 * 60 * 1000) return 'expiring';
+  return 'active';
+}
+
+const STATE_BADGE: Record<string, { color: string; bg: string; border: string; label: string }> = {
+  active:   { color: '#10b981', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(16,185,129,0.3)',  label: 'Active' },
+  expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)',  label: 'Expires soon' },
+  expired:  { color: '#6b7280', bg: 'rgba(75,85,99,0.12)',    border: 'rgba(75,85,99,0.3)',    label: 'Access expired' },
+};
+
+export const SharedPage: React.FC<Props> = () => {
   const [shares, setShares] = useState<ShareItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const fetchSharedDocs = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await api.get('/documents/shared-with-me');
-      if (res.data.success) {
-        setShares(res.data.data.items || []);
-      }
-    } catch (err: any) {
-      console.error('Failed to load shared documents:', err);
+      if (res.data.success) setShares(res.data.data.items || []);
+    } catch (err) {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchSharedDocs();
-  }, []);
+  useEffect(() => { fetchSharedDocs(); }, []);
 
   const handleDownload = async (docId: string, docName: string) => {
     setDownloadingId(docId);
@@ -38,154 +55,176 @@ export const SharedPage: React.FC<Props> = ({ onSelectCase }) => {
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', docName || 'document.pdf');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      document.body.appendChild(link); link.click(); link.remove();
     } catch (err: any) {
-      alert('Download failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Download failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setDownloadingId(null);
     }
   };
 
   const handleRevoke = async (shareId: string) => {
-    if (!confirm('Are you sure you want to revoke this document access grant?')) return;
+    const ok = await confirm({ message: 'Revoke this document access grant?', confirmLabel: 'Revoke', danger: true });
+    if (!ok) return;
     try {
-      const res = await api.post(`/shares/${shareId}/revoke`);
-      if (res.data.success) {
-        alert('Share grant revoked successfully.');
-        await fetchSharedDocs();
-      }
+      await api.post(`/shares/${shareId}/revoke`);
+      toast.success('Access revoked.');
+      await fetchSharedDocs();
     } catch (err: any) {
-      alert('Revocation failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Revocation failed: ' + (err.response?.data?.error?.message || err.message));
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <Share2 className="w-6 h-6 text-blue-600" /> Documents Shared With Me
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Controlled, time-bound access grants shared across investigation departments with cryptographic audit trails.
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>Documents Shared With Me</h2>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+            Time-bounded access grants from other officers in the system.
           </p>
         </div>
-
         <button
           onClick={fetchSharedDocs}
-          className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold flex items-center gap-2 transition-colors self-start sm:self-auto shadow-xs"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+            color: 'var(--text-secondary)', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+          }}
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          <RefreshCw size={13} /> Refresh
         </button>
       </div>
 
-      {/* List */}
+      {/* Content */}
       {loading ? (
-        <div className="py-20 text-center flex flex-col items-center gap-3 text-slate-500 text-xs">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-          Loading active document grants...
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {[0,1,2].map(i => <div key={i} className="skeleton" style={{ height: '100px', borderRadius: '12px' }} />)}
+        </div>
+      ) : loadError ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 20px',
+          background: 'var(--danger-bg)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px',
+        }}>
+          <AlertTriangle size={32} color="var(--danger)" style={{ marginBottom: '12px' }} />
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--danger)', marginBottom: '4px' }}>Could not load shared documents</div>
+          <button
+            onClick={fetchSharedDocs}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px',
+              padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+              background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={13} /> Retry
+          </button>
         </div>
       ) : shares.length === 0 ? (
-        <div className="py-16 text-center bg-white p-8 rounded-2xl border border-slate-200 space-y-3 shadow-xs">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-100">
-            <Share2 className="w-6 h-6" />
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 20px',
+          background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px',
+        }}>
+          <Share2 size={36} color="var(--text-muted)" style={{ opacity: 0.3, marginBottom: '12px' }} />
+          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>No shared documents</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Documents shared with you by other officers will appear here.
           </div>
-          <h3 className="text-sm font-bold text-slate-900">No Documents Shared With You Currently</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            When Investigating or Senior Officers grant you time-bound permissions for a case document, it will securely appear here.
-          </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {shares.map((s) => {
-            const isExpired = new Date(s.expiresAt) <= new Date();
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {shares.map((share, i) => {
+            const state = getShareState(share);
+            const badge = STATE_BADGE[state];
+            const isExpired = state === 'expired';
+            const isExpiring = state === 'expiring';
+            const docId = share.document?.id;
+            const docName = share.document?.name || 'Document';
+
             return (
-              <div key={s.shareId} className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 hover:border-slate-300 transition-colors shadow-xs">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
-                        {s.case?.firNumber || 'Case Document'}
+              <div
+                key={share.shareId}
+                className="animate-fade-in-up"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: `1px solid ${isExpiring ? 'rgba(245,158,11,0.3)' : isExpired ? 'rgba(255,255,255,0.05)' : 'var(--border)'}`,
+                  borderRadius: '12px', padding: '18px 20px',
+                  opacity: isExpired ? 0.6 : 1,
+                  animationDelay: `${i * 50}ms`,
+                  transition: 'border-color 200ms',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Doc name + state badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                      <FileText size={16} color="#60a5fa" style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {docName}
                       </span>
-                      {isExpired ? (
-                        <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                          EXPIRED
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          ACTIVE GRANT
+                      <span style={{
+                        fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                        color: badge.color, background: badge.bg, border: `1px solid ${badge.border}`,
+                        borderRadius: '9999px', padding: '2px 8px',
+                      }}>
+                        {badge.label}
+                      </span>
+                      {isExpiring && <AlertCircle size={13} color="#f59e0b" />}
+                    </div>
+
+                    {/* Meta */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      <span>
+                        Permissions: <strong style={{ color: 'var(--text-secondary)' }}>
+                          {[share.canView && 'View', share.canDownload && 'Download'].filter(Boolean).join(' + ')}
+                        </strong>
+                      </span>
+                      {share.expiresAt && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: isExpiring ? '#f59e0b' : 'var(--text-muted)' }}>
+                          <Clock size={11} />
+                          Expires: {new Date(share.expiresAt).toLocaleDateString('en-IN')}
                         </span>
                       )}
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900">{s.document?.name || 'Investigation Document'}</h3>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                </div>
-
-                {/* Permissions & Expiry */}
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono">
-                  <div>
-                    <span className="text-slate-400 text-[11px] block font-sans">Permissions:</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-emerald-700 flex items-center gap-1 text-[11px] font-bold">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> View
-                      </span>
-                      {s.canDownload ? (
-                        <span className="text-emerald-700 flex items-center gap-1 text-[11px] font-bold">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Download
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 flex items-center gap-1 text-[11px]">
-                          <XCircle className="w-3.5 h-3.5 text-slate-400" /> No Download
-                        </span>
+                      {share.case?.firNumber && (
+                        <span>Case: <strong style={{ color: '#60a5fa', fontFamily: 'JetBrains Mono, monospace' }}>{share.case.firNumber}</strong></span>
                       )}
                     </div>
                   </div>
 
-                  <div>
-                    <span className="text-slate-400 text-[11px] block font-sans">Valid Until:</span>
-                    <span className="text-amber-700 flex items-center gap-1 text-[11px] font-bold mt-1">
-                      <Clock className="w-3.5 h-3.5 text-amber-600" /> {new Date(s.expiresAt).toLocaleDateString()} {new Date(s.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  {onSelectCase && s.case?.id ? (
-                    <button
-                      onClick={() => onSelectCase(s.case.id)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-bold"
-                    >
-                      Open Case File →
-                    </button>
-                  ) : <div />}
-
-                  <div className="flex items-center gap-2">
-                    {s.canDownload && (
+                  {/* Action buttons */}
+                  {!isExpired && docId && (
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                      {(share.canView || share.canDownload) && (
+                        <button
+                          onClick={() => handleDownload(docId, docName)}
+                          disabled={downloadingId === docId}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 12px',
+                            borderRadius: '7px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                            background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60a5fa',
+                            opacity: downloadingId === docId ? 0.5 : 1,
+                          }}
+                        >
+                          {downloadingId === docId
+                            ? <Loader size={11} className="animate-spin" />
+                            : <Download size={11} />
+                          }
+                          {share.canDownload ? 'Download' : 'View'}
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleDownload(s.document.id, s.document.name)}
-                        disabled={downloadingId === s.document.id || isExpired}
-                        className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-40 shadow-xs"
+                        onClick={() => handleRevoke(share.shareId)}
+                        style={{
+                          padding: '7px 12px', borderRadius: '7px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171',
+                        }}
                       >
-                        <Download className="w-3.5 h-3.5" />
-                        {downloadingId === s.document.id ? 'Downloading...' : 'Download File'}
+                        Revoke
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleRevoke(s.shareId)}
-                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 border border-slate-200 text-xs font-bold transition-colors"
-                      title="Revoke share access"
-                    >
-                      Revoke
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

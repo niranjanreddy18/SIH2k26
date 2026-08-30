@@ -1,0 +1,49 @@
+{
+  "name": "slidms-judiciary-network",
+  "version": "1.0.0",
+  "client": {
+    "organization": "Judiciary",
+    "connection": {
+      "timeout": {
+        "peer": {
+          "endorser": "300"
+        }
+      }
+    }
+  },
+  "organizations": {
+    "Judiciary": {
+      "mspid": "JudiciaryMSP",
+      "peers": [
+        "peer0.judiciary.slidms.gov.in"
+      ],
+      "certificateAuthorities": [
+        "ca.judiciary.slidms.gov.in"
+      ]
+    }
+  },
+  "peers": {
+    "peer0.judiciary.slidms.gov.in": {
+      "url": "grpcs://localhost:11051",
+      "tlsCACerts": {
+        "path": "blockchain/organizations/peerOrganizations/judiciary.slidms.gov.in/peers/peer0.judiciary.slidms.gov.in/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.judiciary.slidms.gov.in",
+        "hostnameOverride": "peer0.judiciary.slidms.gov.in"
+      }
+    }
+  },
+  "certificateAuthorities": {
+    "ca.judiciary.slidms.gov.in": {
+      "url": "https://localhost:9054",
+      "caName": "ca-judiciary",
+      "tlsCACerts": {
+        "path": "blockchain/organizations/fabric-ca/judiciary/ca-cert.pem"
+      },
+      "httpOptions": {
+        "verify": false
+      }
+    }
+  }
+}

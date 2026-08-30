@@ -1,14 +1,22 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, UserCheck, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import { ShieldCheck, AlertCircle, ArrowRight, Loader } from 'lucide-react';
 import { UserRole } from '../types';
+
+const PERSONAS = [
+  { role: 'INVESTIGATOR'    as UserRole, name: 'Inspector Vikram Singh', dept: 'Cyber Crime Cell · CID', badge: '#1d4ed8', color: '#60a5fa', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.25)', roleLabel: 'INVESTIGATOR' },
+  { role: 'SENIOR_OFFICER'  as UserRole, name: 'ACP Rajeshwar Sharma',   dept: 'Additional Commissioner',  badge: '#5b21b6', color: '#a78bfa', bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.25)', roleLabel: 'SENIOR OFFICER' },
+  { role: 'FORENSIC_OFFICER'as UserRole, name: 'Dr. Ananya Roy',          dept: 'CFSL Forensics Division',  badge: '#065f46', color: '#34d399', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', roleLabel: 'FORENSIC OFFICER' },
+  { role: 'ADMIN'            as UserRole, name: 'Admin Desk Officer',       dept: 'SLIDMS Directorate',       badge: '#7f1d1d', color: '#f87171', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)',   roleLabel: 'DIRECTORATE ADMIN' },
+];
 
 export const LoginPage: React.FC = () => {
   const { login, quickLogin } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [quickRole, setQuickRole] = useState<string | null>(null);
+  const [error, setError]       = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,115 +25,203 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email, password);
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials');
+      setError(err.message || 'Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleQuickLogin = async (role: UserRole) => {
-    setLoading(true);
+    setQuickRole(role);
     setError(null);
     try {
       await quickLogin(role);
     } catch (err: any) {
-      setError(err.message || 'Quick login failed');
+      setError(err.message || 'Quick login failed.');
     } finally {
-      setLoading(false);
+      setQuickRole(null);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-8 shadow-xl z-10 space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-200 mb-1">
-            <ShieldCheck className="w-8 h-8 text-blue-600" />
+    <div style={{
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.06) 0%, transparent 50%), var(--bg-base)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Background grid pattern */}
+      <div style={{
+        position: 'absolute', inset: 0, opacity: 0.03,
+        backgroundImage: 'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)',
+        backgroundSize: '48px 48px',
+        pointerEvents: 'none',
+      }} />
+
+      <div className="animate-fade-in-up" style={{ width: '100%', maxWidth: '440px', position: 'relative', zIndex: 1 }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div className="animate-glow-blue" style={{
+            display: 'inline-flex', padding: '16px',
+            background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)',
+            borderRadius: '20px', marginBottom: '16px',
+          }}>
+            <ShieldCheck size={36} color="#3b82f6" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">SLIDMS Security Portal</h1>
-          <p className="text-xs text-slate-500">Secure Legal & Investigation Document Management System</p>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+            SLIDMS
+          </h1>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px', lineHeight: 1.5 }}>
+            Secure Legal &amp; Investigation Document Management System
+          </p>
         </div>
 
-        {error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" /> {error}
-          </div>
-        )}
+        {/* Card */}
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '32px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        }}>
+          {/* Error banner */}
+          {error && (
+            <div className="animate-fade-in" style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '12px 14px', marginBottom: '20px',
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '8px', color: '#f87171', fontSize: '13px',
+            }}>
+              <AlertCircle size={15} style={{ flexShrink: 0 }} />
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Official Government Email</label>
-            <input
-              type="email"
-              required
-              placeholder="officer@police.gov.in"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Official Government Email
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="officer@police.gov.in"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={loading}
+                className="input-dark"
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Security Password</label>
-            <input
-              type="password"
-              required
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {loading ? 'Authenticating...' : 'Sign In to Security Portal'}
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
-
-        {/* 1-Click Persona Quick Login Buttons */}
-        <div className="pt-4 border-t border-slate-200 space-y-3">
-          <div className="text-center text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-            ⚡ 1-Click Persona Demo Logins
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 text-xs">
-            <button
-              onClick={() => handleQuickLogin('INVESTIGATOR')}
-              className="p-3 bg-blue-50/70 hover:bg-blue-100/80 text-blue-900 border border-blue-200 rounded-xl font-medium text-left transition-colors flex flex-col"
-            >
-              <span className="font-bold text-blue-950">Inspector Vikram</span>
-              <span className="text-[10px] text-blue-600 font-mono font-bold">INVESTIGATOR</span>
-            </button>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Security Password
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                disabled={loading}
+                className="input-dark"
+              />
+            </div>
 
             <button
-              onClick={() => handleQuickLogin('SENIOR_OFFICER')}
-              className="p-3 bg-amber-50/70 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl font-medium text-left transition-colors flex flex-col"
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%', padding: '12px', borderRadius: '8px',
+                background: loading ? 'rgba(59,130,246,0.5)' : '#3b82f6',
+                color: 'white', fontSize: '14px', fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                border: 'none', transition: 'background 200ms',
+                boxShadow: loading ? 'none' : '0 4px 20px rgba(59,130,246,0.3)',
+              }}
             >
-              <span className="font-bold text-amber-950">ACP Sharma</span>
-              <span className="text-[10px] text-amber-600 font-mono font-bold">SENIOR OFFICER</span>
+              {loading ? (
+                <>
+                  <Loader size={15} className="animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                <>
+                  Sign In to Security Portal
+                  <ArrowRight size={15} />
+                </>
+              )}
             </button>
+          </form>
 
-            <button
-              onClick={() => handleQuickLogin('FORENSIC_OFFICER')}
-              className="p-3 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-900 border border-emerald-200 rounded-xl font-medium text-left transition-colors flex flex-col"
-            >
-              <span className="font-bold text-emerald-950">Dr. Ananya Roy</span>
-              <span className="text-[10px] text-emerald-600 font-mono font-bold">FORENSIC OFFICER</span>
-            </button>
+          {/* Divider */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            margin: '24px 0', 
+          }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace' }}>
+              ⚡ 1-CLICK DEMO LOGIN
+            </span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          </div>
 
-            <button
-              onClick={() => handleQuickLogin('ADMIN')}
-              className="p-3 bg-purple-50/70 hover:bg-purple-100/80 text-purple-900 border border-purple-200 rounded-xl font-medium text-left transition-colors flex flex-col"
-            >
-              <span className="font-bold text-purple-950">Admin Desk</span>
-              <span className="text-[10px] text-purple-600 font-mono font-bold">DIRECTORATE ADMIN</span>
-            </button>
+          {/* Persona cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {PERSONAS.map(p => {
+              const isLoading = quickRole === p.role;
+              return (
+                <button
+                  key={p.role}
+                  onClick={() => handleQuickLogin(p.role)}
+                  disabled={!!quickRole}
+                  style={{
+                    padding: '12px', borderRadius: '10px', textAlign: 'left',
+                    background: p.bg, border: `1px solid ${p.border}`,
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    transition: 'transform 150ms, box-shadow 150ms',
+                    opacity: quickRole && !isLoading ? 0.5 : 1,
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
+                >
+                  {isLoading ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '36px', justifyContent: 'center' }}>
+                      <Loader size={14} color={p.color} className="animate-spin" />
+                      <span style={{ fontSize: '11px', color: p.color, fontWeight: 600 }}>Authenticating…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>
+                        {p.name}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', lineHeight: 1.3 }}>
+                        {p.dept}
+                      </div>
+                      <span style={{
+                        fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                        color: p.color, background: 'rgba(0,0,0,0.2)',
+                        borderRadius: '9999px', padding: '2px 7px',
+                      }}>
+                        {p.roleLabel}
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        <p style={{ textAlign: 'center', marginTop: '16px', fontSize: '10px', color: 'var(--text-muted)' }}>
+          SLIDMS v1.0 · Smart India Hackathon 2k26 · Cryptographic Chain of Custody
+        </p>
       </div>
     </div>
   );

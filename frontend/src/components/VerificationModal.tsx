@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, ShieldCheck, ShieldAlert, AlertTriangle, RefreshCw, FileCode } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, ShieldCheck, ShieldAlert, RefreshCw, FileCode, Check, Loader } from 'lucide-react';
 import api from '../services/api';
-import { VerificationResult } from '../types';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 interface Props {
   documentId: string;
@@ -9,132 +10,317 @@ interface Props {
   onClose: () => void;
 }
 
+type VerifyResult = {
+  status: 'VERIFIED' | 'MISMATCH';
+  registeredHash: string;
+  currentHash: string | null;
+  txReference?: string;
+  blockchainRef?: string | null;
+  fabricVerification?: any;
+  checkedAt?: string;
+  verifiedAt?: string;
+};
+
+// Character-by-character hash reveal animation
+const HashReveal: React.FC<{ hash: string; color: string; mismatchHash?: string; isAnimating: boolean }> = ({
+  hash, color, mismatchHash, isAnimating
+}) => {
+  const [displayed, setDisplayed] = useState('');
+  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+
+  useEffect(() => {
+    if (!isAnimating) { setDisplayed(hash); return; }
+    setDisplayed('');
+    let i = 0;
+    clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      i++;
+      setDisplayed(hash.slice(0, i));
+      if (i >= hash.length) clearInterval(intervalRef.current);
+    }, 18);
+    return () => clearInterval(intervalRef.current);
+  }, [hash, isAnimating]);
+
+  return (
+    <div style={{
+      fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', padding: '10px 12px',
+      background: 'rgba(0,0,0,0.3)', borderRadius: '6px',
+      border: `1px solid ${color}44`, wordBreak: 'break-all', lineHeight: 1.6,
+    }}>
+      {displayed.split('').map((ch, idx) => {
+        const isDiff = mismatchHash && mismatchHash[idx] && hash[idx] !== mismatchHash[idx];
+        return (
+          <span
+            key={idx}
+            className="hash-char"
+            style={{
+              color: isDiff ? '#ef4444' : color,
+              background: isDiff ? 'rgba(239,68,68,0.2)' : 'transparent',
+              animationDelay: isAnimating ? `${idx * 18}ms` : '0ms',
+            }}
+          >
+            {ch}
+          </span>
+        );
+      })}
+      {displayed.length < hash.length && (
+        <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>
+          {hash.slice(displayed.length).split('').map((_, i) => '·').join('')}
+        </span>
+      )}
+    </div>
+  );
+};
+
+// Step-by-step loading
+const LOADING_STEPS = [
+  'Retrieving file from secure storage...',
+  'Calculating SHA-256 cryptographic hash...',
+  'Comparing with registered ledger hash...',
+  'Querying blockchain transaction reference...',
+];
+
 export const VerificationModal: React.FC<Props> = ({ documentId, documentName, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [tamperLoading, setTamperLoading] = useState(false);
-  const [result, setResult] = useState<VerificationResult | null>(null);
+  const [result, setResult] = useState<VerifyResult | null>(null);
   const [tamperedNotice, setTamperedNotice] = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [shakeKey, setShakeKey] = useState(0);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const runVerification = async () => {
     setLoading(true);
-    setTamperedNotice(null);
+    setLoadingStep(0);
+    setIsAnimating(false);
+
+    // Step progress animation
+    const stepInterval = setInterval(() => {
+      setLoadingStep(s => Math.min(s + 1, LOADING_STEPS.length - 1));
+    }, 400);
+
     try {
       const res = await api.post(`/documents/${documentId}/verify`);
+      clearInterval(stepInterval);
       if (res.data.success) {
-        setResult(res.data.data);
+        const data = res.data.data;
+        setResult(data);
+        setIsAnimating(true);
+        // If tampered, trigger shake after a short delay
+        if (data.status === 'MISMATCH') {
+          setTimeout(() => setShakeKey(k => k + 1), 300);
+        }
       }
     } catch (err: any) {
-      alert('Verification request failed: ' + (err.response?.data?.error?.message || err.message));
+      clearInterval(stepInterval);
+      toast.error('Verification failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   const triggerTamperDemo = async () => {
-    if (!confirm('This action will overwrite the physical file on storage disk out-of-band to simulate malware/tampering. Continue?')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Simulate Tampering',
+      message: 'This will overwrite the physical file on disk to simulate tampering/malware. Continue?',
+      confirmLabel: 'Corrupt File',
+      danger: true,
+    });
+    if (!ok) return;
     setTamperLoading(true);
+    setTamperedNotice(null);
     try {
-      const res = await api.post(`/documents/${documentId}/tamper-demo`);
-      if (res.data.success) {
-        setTamperedNotice('⚠️ File modified on disk out-of-band! Now click "Re-run Verification" to see the Tamper Detection Climax.');
-        await runVerification();
-      }
+      await api.post(`/documents/${documentId}/tamper-demo`);
+      setTamperedNotice('File modified on disk out-of-band! Re-running verification...');
+      await runVerification();
     } catch (err: any) {
-      alert('Tamper demo failed: ' + err.message);
+      toast.error('Tamper demo failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setTamperLoading(false);
     }
   };
 
-  React.useEffect(() => {
-    runVerification();
-  }, [documentId]);
+  useEffect(() => { runVerification(); }, [documentId]);
+
+  const isVerified = result?.status === 'VERIFIED';
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2 text-blue-700 font-extrabold text-lg">
-            <ShieldCheck className="w-5 h-5 text-blue-600" /> Cryptographic Integrity Verification
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: '16px', width: '100%', maxWidth: '620px',
+        overflow: 'hidden', boxShadow: 'var(--shadow-modal)',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--bg-elevated)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ padding: '8px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: '8px' }}>
+              <ShieldCheck size={18} color="#3b82f6" />
+            </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                DOCUMENT INTEGRITY VERIFICATION
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                {documentName}
+              </div>
+            </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+          >
+            <X size={18} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          <div>
-            <div className="text-xs text-slate-400 uppercase font-mono font-bold">Target Investigation Document</div>
-            <div className="text-base font-bold text-slate-900 mt-0.5">{documentName}</div>
-            <div className="text-xs font-mono text-slate-400 mt-0.5">ID: {documentId}</div>
-          </div>
-
+        {/* Body */}
+        <div style={{ padding: '24px' }}>
           {loading ? (
-            <div className="py-12 flex flex-col items-center justify-center text-slate-500 gap-3 text-xs">
-              <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-              <p className="text-sm">Fetching MinIO stream & re-computing SHA-256 hash...</p>
+            <div style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+              <Loader size={32} color="#3b82f6" className="animate-spin" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', maxWidth: '340px' }}>
+                {LOADING_STEPS.map((step, i) => (
+                  <div
+                    key={i}
+                    className={i <= loadingStep ? 'animate-fade-in' : ''}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      opacity: i > loadingStep ? 0 : 1,
+                      animationDelay: `${i * 400}ms`,
+                    }}
+                  >
+                    <div style={{
+                      width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: i < loadingStep ? '#10b981' : i === loadingStep ? '#3b82f6' : 'var(--bg-elevated)',
+                      border: `1px solid ${i < loadingStep ? '#10b981' : i === loadingStep ? '#3b82f6' : 'var(--border)'}`,
+                    }}>
+                      {i < loadingStep
+                        ? <Check size={10} color="white" />
+                        : i === loadingStep
+                        ? <Loader size={10} color="white" className="animate-spin" />
+                        : null
+                      }
+                    </div>
+                    <span style={{ fontSize: '12px', color: i <= loadingStep ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                      {step}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : result ? (
-            <div className="space-y-4">
-              {/* Status Header */}
-              <div className={`p-5 rounded-2xl border flex items-center gap-4 shadow-xs ${
-                result.status === 'VERIFIED'
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  : 'bg-rose-50 border-rose-300 text-rose-900'
-              }`}>
-                {result.status === 'VERIFIED' ? (
-                  <ShieldCheck className="w-10 h-10 text-emerald-600 shrink-0" />
-                ) : (
-                  <ShieldAlert className="w-10 h-10 text-rose-600 shrink-0 animate-bounce" />
-                )}
-                <div>
-                  <div className="text-base font-black tracking-wide">
-                    INTEGRITY STATUS: {result.status}
-                  </div>
-                  <p className="text-xs opacity-90 mt-0.5 font-medium">
-                    {result.status === 'VERIFIED'
-                      ? 'The current file on storage matches the registered SHA-256 hash and permissioned ledger transaction record.'
-                      : 'TAMPER DETECTED! The physical file on storage disk has been altered since the hash was locked.'}
-                  </p>
-                </div>
-              </div>
-
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Tampered notice */}
               {tamperedNotice && (
-                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-center gap-2 font-medium">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" /> {tamperedNotice}
+                <div className="animate-fade-in" style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 14px',
+                  background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+                  borderRadius: '8px', color: '#f59e0b', fontSize: '12px', fontWeight: 600,
+                }}>
+                  ⚠️ {tamperedNotice}
                 </div>
               )}
 
-              {/* Hash Details Comparison */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 text-xs font-mono">
+              {/* Registered Hash */}
+              <div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
+                  Registered Hash (SHA-256):
+                </div>
+                <HashReveal
+                  hash={result.registeredHash}
+                  color="#10b981"
+                  isAnimating={isAnimating}
+                />
+              </div>
+
+              {/* Current Hash */}
+              {result.currentHash && (
                 <div>
-                  <div className="text-slate-500 text-[11px] uppercase font-bold tracking-wider font-sans">Registered DB & Ledger Hash (SHA-256):</div>
-                  <div className="text-emerald-800 bg-white p-2.5 rounded-xl mt-1 overflow-x-auto border border-slate-200 font-bold">
-                    {result.registeredHash}
+                  <div style={{
+                    fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em',
+                    textTransform: 'uppercase', marginBottom: '6px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    color: isVerified ? 'var(--text-muted)' : '#f87171',
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                    Current Hash (SHA-256):
+                    {!isVerified && (
+                      <span style={{
+                        fontSize: '9px', fontWeight: 700, color: '#ef4444',
+                        background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                        borderRadius: '9999px', padding: '2px 8px',
+                      }}>MISMATCH</span>
+                    )}
+                  </div>
+                  <HashReveal
+                    hash={result.currentHash}
+                    color={isVerified ? '#10b981' : '#f87171'}
+                    mismatchHash={isVerified ? undefined : result.registeredHash}
+                    isAnimating={isAnimating}
+                  />
+                </div>
+              )}
+
+              {/* Blockchain Reference */}
+              {(result.txReference || result.blockchainRef) && (
+                <div className="animate-fade-in" style={{ animationDelay: '500ms' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
+                    Blockchain Reference:
+                  </div>
+                  <div style={{
+                    padding: '8px 12px', borderRadius: '6px',
+                    background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(59,130,246,0.2)',
+                    fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#60a5fa',
+                  }}>
+                    {result.txReference || result.blockchainRef}
                   </div>
                 </div>
+              )}
 
+              {/* Result Panel */}
+              <div
+                key={shakeKey}
+                className={`animate-fade-in-up ${isVerified ? 'animate-glow-green' : 'animate-glow-red animate-shake'}`}
+                style={{
+                  padding: '20px', borderRadius: '10px', marginTop: '4px',
+                  background: isVerified ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                  border: `2px solid ${isVerified ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.5)'}`,
+                  display: 'flex', alignItems: 'center', gap: '16px',
+                }}
+              >
+                {isVerified
+                  ? <ShieldCheck size={36} color="#10b981" style={{ flexShrink: 0 }} />
+                  : <ShieldAlert size={36} color="#ef4444" style={{ flexShrink: 0, animation: 'pulse 1s infinite' }} />
+                }
                 <div>
-                  <div className="text-slate-500 text-[11px] uppercase font-bold tracking-wider font-sans">Current Re-calculated Storage Hash (SHA-256):</div>
-                  <div className={`p-2.5 rounded-xl mt-1 overflow-x-auto border ${
-                    result.status === 'VERIFIED' 
-                      ? 'text-emerald-800 bg-white border-slate-200 font-bold' 
-                      : 'text-rose-800 bg-rose-50 border-rose-300 font-black'
-                  }`}>
-                    {result.currentHash}
+                  <div style={{
+                    fontSize: '15px', fontWeight: 800, letterSpacing: '0.04em',
+                    color: isVerified ? '#10b981' : '#ef4444',
+                    textTransform: 'uppercase', marginBottom: '4px',
+                  }}>
+                    {isVerified ? 'INTEGRITY VERIFIED' : 'TAMPERING DETECTED'}
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200">
-                  <div>
-                    <span className="text-slate-400 font-sans font-medium">Blockchain Ref:</span>
-                    <span className="text-blue-700 font-bold ml-2">{result.blockchainRef || 'TX-839201'}</span>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {isVerified
+                      ? 'Hashes match · Document is authentic · Blockchain record confirmed.'
+                      : 'Hash mismatch — document has been altered since registration. Evidence integrity compromised!'
+                    }
                   </div>
-                  <div>
-                    <span className="text-slate-400 font-sans font-medium">Verified At:</span>
-                    <span className="text-slate-700 ml-2">{new Date(result.verifiedAt).toLocaleTimeString()}</span>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
+                    Verified: {new Date(result.checkedAt || result.verifiedAt || Date.now()).toISOString()}
                   </div>
                 </div>
               </div>
@@ -142,30 +328,49 @@ export const VerificationModal: React.FC<Props> = ({ documentId, documentName, o
           ) : null}
         </div>
 
-        {/* Modal Actions */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        {/* Footer */}
+        <div style={{
+          padding: '14px 20px', borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--bg-elevated)',
+        }}>
           <button
             onClick={triggerTamperDemo}
             disabled={tamperLoading || loading}
-            className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
-            title="Simulate out-of-band file modification on disk to trigger MISMATCH"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px',
+              borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+              color: '#f87171', opacity: (tamperLoading || loading) ? 0.5 : 1,
+              transition: 'all 150ms',
+            }}
           >
-            <FileCode className="w-4 h-4 text-rose-600" />
-            {tamperLoading ? 'Corrupting File...' : '⚡ Demo Tamper Climax'}
+            <FileCode size={14} />
+            {tamperLoading ? 'Corrupting file...' : '⚡ Demo Tamper Climax'}
           </button>
 
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={runVerification}
               disabled={loading}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px',
+                borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                background: '#3b82f6', color: 'white', border: 'none',
+                opacity: loading ? 0.5 : 1,
+                boxShadow: '0 4px 12px rgba(59,130,246,0.25)',
+              }}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
               Re-run Verification
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold"
+              style={{
+                padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                color: 'var(--text-secondary)', cursor: 'pointer',
+              }}
             >
               Close
             </button>

@@ -1,0 +1,49 @@
+{
+  "name": "slidms-forensic-network",
+  "version": "1.0.0",
+  "client": {
+    "organization": "ForensicLab",
+    "connection": {
+      "timeout": {
+        "peer": {
+          "endorser": "300"
+        }
+      }
+    }
+  },
+  "organizations": {
+    "ForensicLab": {
+      "mspid": "ForensicLabMSP",
+      "peers": [
+        "peer0.forensic.slidms.gov.in"
+      ],
+      "certificateAuthorities": [
+        "ca.forensic.slidms.gov.in"
+      ]
+    }
+  },
+  "peers": {
+    "peer0.forensic.slidms.gov.in": {
+      "url": "grpcs://localhost:9051",
+      "tlsCACerts": {
+        "path": "blockchain/organizations/peerOrganizations/forensic.slidms.gov.in/peers/peer0.forensic.slidms.gov.in/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.forensic.slidms.gov.in",
+        "hostnameOverride": "peer0.forensic.slidms.gov.in"
+      }
+    }
+  },
+  "certificateAuthorities": {
+    "ca.forensic.slidms.gov.in": {
+      "url": "https://localhost:8054",
+      "caName": "ca-forensic",
+      "tlsCACerts": {
+        "path": "blockchain/organizations/fabric-ca/forensic/ca-cert.pem"
+      },
+      "httpOptions": {
+        "verify": false
+      }
+    }
+  }
+}

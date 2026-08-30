@@ -433,6 +433,61 @@ Block N:            prevHash = Block (N-1)'s hash
 
 **Tamper Detection**: If any block's data is modified, its hash changes, breaking the `prevHash` link of all subsequent blocks.
 
+### Hyperledger Fabric 2.5 Network Architecture
+
+SLIDMS implements a multi-organization enterprise permissioned ledger running on Hyperledger Fabric 2.5:
+
+```
+                          ┌───────────────────────────┐
+                          │    Raft Orderer Node      │
+                          │   orderer.slidms.gov.in   │
+                          │       Port: 7050          │
+                          └─────────────┬─────────────┘
+                                        │
+                         slidms-channel (Channel)
+        ┌───────────────────────────────┼───────────────────────────────┐
+        ▼                               ▼                               ▼
+┌───────────────────┐         ┌───────────────────┐         ┌───────────────────┐
+│   PoliceDeptOrg   │         │  ForensicLabOrg   │         │   JudiciaryOrg    │
+│    (Org1 - Peer0) │         │   (Org2 - Peer0)  │         │   (Org3 - Peer0)  │
+│    Port: 7051     │         │    Port: 9051     │         │    Port: 11051    │
+│    CouchDB: 5984  │         │    CouchDB: 7984  │         │    CouchDB: 8984  │
+│    CA: 7054       │         │    CA: 8054       │         │    CA: 9054       │
+└─────────┬─────────┘         └─────────┬─────────┘         └─────────┬─────────┘
+          └─────────────────────────────┼─────────────────────────────┘
+                                        ▼
+                          ┌───────────────────────────┐
+                          │   slidms-cc Chaincode     │
+                          │     (TypeScript 5.x)      │
+                          │  • RegisterDocument       │
+                          │  • UpdateDocumentStatus   │
+                          │  • VerifyDocument         │
+                          │  • GetDocumentHistory     │
+                          │  • RegisterEvidence       │
+                          │  • RecordCustodyTransfer  │
+                          │  • QueryDocumentsByCase   │
+                          └───────────────────────────┘
+```
+
+#### Smart Contract (Chaincode) API
+
+| Function | Type | Description |
+|---|---|---|
+| `RegisterDocument(docId, caseId, name, type, hash, owner, ownerName, classification, versionNo, timestamp)` | Transaction | Anchors SHA-256 fingerprint of new document upload on-chain |
+| `UpdateDocumentStatus(docId, newStatus, actorId, actorName, hash, timestamp)` | Transaction | Records lifecycle transition (`SUBMITTED`, `APPROVED`, `SIGNED`, `LOCKED`) |
+| `UpdateDocumentVersion(docId, versionNo, hash, actorId, actorName, timestamp)` | Transaction | Records new version upload with reset to `DRAFT` |
+| `QueryDocument(docId)` | Query | Reads current ledger state for a document |
+| `VerifyDocument(docId, currentHash)` | Query | Compares live calculated hash against immutable ledger hash |
+| `GetDocumentHistory(docId)` | Query | Traverses Fabric key history for complete immutable audit log |
+| `RegisterEvidence(evidenceId, caseId, type, collectorId, collectorName, timestamp)` | Transaction | Anchors physical/digital evidence item on-chain |
+| `RecordCustodyTransfer(evidenceId, fromId, fromName, toId, toName, reason, hash, timestamp)` | Transaction | Records custody handover on-chain |
+| `QueryDocumentsByCase(caseId)` | Query (CouchDB) | Rich JSON query to retrieve all documents linked to a case |
+
+#### Dual-Write Fallback Architecture
+The backend uses a resilient **dual-write** strategy:
+- When Hyperledger Fabric is online: writes transaction to Fabric peers via gRPC Gateway SDK AND records in PostgreSQL.
+- When Fabric is offline / local development: seamlessly falls back to PostgreSQL cryptographic hash-chaining with zero downtime or runtime exceptions.
+
 ---
 
 ## ✅ Current Status & What's Done
@@ -498,6 +553,13 @@ Block N:            prevHash = Block (N-1)'s hash
 - [ ] **Loading skeletons** — Add skeleton loaders to pages during API fetch
 - [ ] **Classification-based access control** — Enforce classification tier checks on backend (currently metadata-only)
 
+### Completed in Current Sprint ✅
+
+- [x] **Hyperledger Fabric 2.5 Multi-Org Integration** — 3 organizations (`PoliceDeptOrg`, `ForensicLabOrg`, `JudiciaryOrg`), Raft consensus orderer, 3 CouchDB instances, 3 Fabric CAs.
+- [x] **TypeScript Smart Contract (Chaincode)** — `DocumentContract` in `blockchain/chaincode` supporting `RegisterDocument`, `UpdateDocumentStatus`, `QueryDocument`, `VerifyDocument`, `GetDocumentHistory`, `RegisterEvidence`, `RecordCustodyTransfer`, and CouchDB rich queries.
+- [x] **Node.js Fabric Gateway SDK Service** — `FabricService` using `@hyperledger/fabric-gateway` and `@grpc/grpc-js` with graceful dual-write fallback to PostgreSQL.
+- [x] **Blockchain Ledger Visuals** — Real 64-char transaction hash tracking, live network indicator, and blockchain status card in dashboard.
+
 ### Medium Priority
 
 - [ ] **Real MinIO/S3 integration** — Replace local filesystem storage with MinIO object storage
@@ -514,7 +576,6 @@ Block N:            prevHash = Block (N-1)'s hash
 - [ ] **Full-text search** — PostgreSQL `tsvector` for document content search
 - [ ] **Notification system** — In-app + email notifications for workflow events
 - [ ] **Mobile responsive** — Full mobile-optimized layout
-- [ ] **Hyperledger Fabric integration** — Replace single-node ledger with multi-node permissioned blockchain
 
 ---
 
@@ -533,7 +594,22 @@ Block N:            prevHash = Block (N-1)'s hash
 CREATE DATABASE slidms_db;
 ```
 
-### 2. Backend
+### 2. (Optional) Start Hyperledger Fabric Network
+
+To run with the real 3-organization Hyperledger Fabric permissioned ledger (requires WSL2 Ubuntu + Docker Desktop):
+
+```bash
+# In WSL2 Ubuntu terminal:
+cd /mnt/c/Users/niranjan\ reddy/OneDrive/Desktop/SIH26/blockchain/network
+chmod +x start-network.sh stop-network.sh
+./start-network.sh
+
+# To tear down when finished:
+./stop-network.sh
+```
+> **Note**: If Fabric is not running, the backend automatically operates in dual-write fallback mode with PostgreSQL cryptographic hash-chaining.
+
+### 3. Backend
 
 ```bash
 cd backend
@@ -544,10 +620,10 @@ npm install
 
 npm run dev
 # Server starts on http://localhost:5000
-# Auto-runs migrations and seeds demo data on startup
+# Auto-runs migrations, seeds demo data, and connects to Fabric Gateway
 ```
 
-### 3. Frontend
+### 4. Frontend
 
 ```bash
 cd frontend
@@ -557,7 +633,7 @@ npm run dev
 # Proxies API requests to backend :5000
 ```
 
-### 4. Open Browser
+### 5. Open Browser
 
 Navigate to **http://localhost:5173** and use any demo account to log in.
 

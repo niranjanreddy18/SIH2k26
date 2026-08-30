@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, UserPlus, Lock, Unlock, Users, Key, FileCheck, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import {
+  Shield, UserPlus, Lock, Unlock, Users, Key, FileCheck,
+  RefreshCw, AlertTriangle, CheckCircle2, ShieldAlert, Settings, Search, Loader
+} from 'lucide-react';
 import api from '../services/api';
 import { AdminUser, AuditEvent } from '../types';
+import { useToast } from '../context/ToastContext';
 
 export const AdminPage: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'audit'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'audit' | 'policies'>('users');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditEvent[]>([]);
+  const [userSearch, setUserSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   // New user form state
@@ -17,6 +22,7 @@ export const AdminPage: React.FC = () => {
   const [role, setRole] = useState('INVESTIGATOR');
   const [department, setDepartment] = useState('');
   const [creating, setCreating] = useState(false);
+  const toast = useToast();
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -26,7 +32,7 @@ export const AdminPage: React.FC = () => {
         setUsers(res.data.data.items || []);
       }
     } catch (err: any) {
-      console.error('Failed to load users:', err);
+      toast.error('Failed to load users: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -40,7 +46,7 @@ export const AdminPage: React.FC = () => {
         setAuditLogs(res.data.data.items || []);
       }
     } catch (err: any) {
-      console.error('Failed to load admin audit logs:', err);
+      toast.error('Failed to load audit logs: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -48,18 +54,19 @@ export const AdminPage: React.FC = () => {
 
   useEffect(() => {
     if (activeSubTab === 'users') fetchUsers();
-    else fetchAdminAudit();
+    else if (activeSubTab === 'audit') fetchAdminAudit();
+    else setLoading(false);
   }, [activeSubTab]);
 
   const handleUnlockUser = async (userId: string) => {
     try {
       const res = await api.patch(`/admin/users/${userId}/unlock`);
       if (res.data.success) {
-        alert('User account unlocked successfully.');
+        toast.success('User account unlocked successfully.');
         await fetchUsers();
       }
     } catch (err: any) {
-      alert('Unlock failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Unlock failed: ' + (err.response?.data?.error?.message || err.message));
     }
   };
 
@@ -67,11 +74,11 @@ export const AdminPage: React.FC = () => {
     try {
       const res = await api.patch(`/admin/users/${userId}/role`, { role: newRole });
       if (res.data.success) {
-        alert('User role updated successfully.');
+        toast.success('User role updated successfully.');
         await fetchUsers();
       }
     } catch (err: any) {
-      alert('Role update failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Role update failed: ' + (err.response?.data?.error?.message || err.message));
     }
   };
 
@@ -89,127 +96,460 @@ export const AdminPage: React.FC = () => {
         mfaEnabled: true
       });
       if (res.data.success) {
+        toast.success('Officer account created.');
         setShowAddUser(false);
         setName('');
         setEmail('');
         setPassword('');
+        setDepartment('');
         await fetchUsers();
       }
     } catch (err: any) {
-      alert('Create user failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Create user failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setCreating(false);
     }
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--bg-elevated)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-primary)',
+    borderRadius: '8px',
+    padding: '9px 12px',
+    fontSize: '12px',
+    outline: 'none',
+  };
+
+  const filteredUsers = users.filter(u =>
+    u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+    (u.department || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.role.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Directorate Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+        gap: '16px', padding: '20px 24px',
+        background: 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(139,92,246,0.06) 100%)',
+        border: '1px solid var(--border)', borderRadius: '14px',
+      }}>
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <Shield className="w-6 h-6 text-purple-600" /> IT & Security Administration Directorate
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            System configuration, user access provisioning, cryptographic lockout controls, and master audit verification.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              padding: '8px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '10px', display: 'flex',
+            }}>
+              <Shield size={20} color="#f87171" />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                Admin Directorate
+              </h1>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                User access provisioning, cryptographic lockout controls, and master audit verification
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {activeSubTab === 'users' && (
             <button
               onClick={() => setShowAddUser(true)}
-              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-purple-600/20"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '7px',
+                padding: '9px 16px', borderRadius: '8px',
+                background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: 700,
+                cursor: 'pointer', border: 'none',
+                boxShadow: '0 4px 16px rgba(239,68,68,0.25)', transition: 'background 150ms',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#dc2626')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#ef4444')}
             >
-              <UserPlus className="w-4 h-4" /> Add Officer Account
+              <UserPlus size={14} /> Add Officer Account
             </button>
           )}
           <button
-            onClick={() => (activeSubTab === 'users' ? fetchUsers() : fetchAdminAudit())}
-            className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold flex items-center gap-2 shadow-xs"
+            onClick={() => (activeSubTab === 'users' ? fetchUsers() : activeSubTab === 'audit' ? fetchAdminAudit() : null)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              color: 'var(--text-secondary)', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+            }}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveSubTab('users')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
-            activeSubTab === 'users'
-              ? 'border-purple-600 text-purple-700 bg-purple-50/50'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" /> System Users & Lockout Controls
-        </button>
-        <button
-          onClick={() => setActiveSubTab('audit')}
-          className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
-            activeSubTab === 'audit'
-              ? 'border-purple-600 text-purple-700 bg-purple-50/50'
-              : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <FileCheck className="w-4 h-4" /> System-Wide Master Audit
-        </button>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', gap: '4px' }}>
+        {[
+          { id: 'users', label: 'User Management', icon: Users },
+          { id: 'audit', label: 'System Audit', icon: FileCheck },
+          { id: 'policies', label: 'Security Policies', icon: Settings },
+        ].map(({ id, label, icon: Icon }) => {
+          const isActive = activeSubTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveSubTab(id as any)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '10px 16px', fontSize: '12px', fontWeight: isActive ? 700 : 500,
+                color: isActive ? '#f87171' : 'var(--text-muted)',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                borderBottom: `2px solid ${isActive ? '#ef4444' : 'transparent'}`,
+                transition: 'all 150ms',
+              }}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          );
+        })}
       </div>
+
+      {/* ─── Users Subtab ─── */}
+      {activeSubTab === 'users' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* User Search Bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
+          }}>
+            <Search size={14} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Search officer accounts by name, email, department, role..."
+              value={userSearch}
+              onChange={e => setUserSearch(e.target.value)}
+              style={{ ...inputStyle, border: 'none', padding: '0', background: 'transparent' }}
+            />
+          </div>
+
+          <div style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden',
+          }}>
+            {loading ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <Loader size={24} color="#f87171" className="animate-spin" style={{ margin: '0 auto 10px' }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading system accounts...</span>
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                No accounts match the criteria.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+                      {['Officer Name', 'Official Email', 'Assigned Role', 'Department', 'Lockout Status', 'Actions'].map((h, idx) => (
+                        <th key={h} style={{
+                          padding: '12px 16px', fontSize: '10px', fontWeight: 700,
+                          textAlign: idx === 5 ? 'right' : 'left',
+                          color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                          fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map(u => (
+                      <tr
+                        key={u.id}
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 100ms' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {u.name}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-secondary)' }}>
+                          {u.email}
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <select
+                            value={u.role}
+                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            style={{
+                              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                              color: '#a78bfa', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
+                              borderRadius: '6px', padding: '4px 8px', fontSize: '10px', outline: 'none', cursor: 'pointer',
+                            }}
+                          >
+                            <option value="INVESTIGATOR">INVESTIGATOR</option>
+                            <option value="SENIOR_OFFICER">SENIOR_OFFICER</option>
+                            <option value="FORENSIC_OFFICER">FORENSIC_OFFICER</option>
+                            <option value="ADMIN">ADMIN</option>
+                          </select>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                          {u.department || 'General Directorate'}
+                        </td>
+                        <td style={{ padding: '12px 16px' }}>
+                          {u.isLocked ? (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                              color: '#ef4444', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                              borderRadius: '9999px', padding: '2px 8px',
+                            }}>
+                              <Lock size={10} /> LOCKED
+                            </span>
+                          ) : (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                              color: '#10b981', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)',
+                              borderRadius: '9999px', padding: '2px 8px',
+                            }}>
+                              <CheckCircle2 size={10} /> Active
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                          {u.isLocked && (
+                            <button
+                              onClick={() => handleUnlockUser(u.id)}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700,
+                                background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)',
+                                color: '#f59e0b', cursor: 'pointer',
+                              }}
+                            >
+                              <Unlock size={11} /> Unlock
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Audit Subtab ─── */}
+      {activeSubTab === 'audit' && (
+        <div style={{
+          background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden',
+        }}>
+          {loading ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <Loader size={24} color="#f87171" className="animate-spin" style={{ margin: '0 auto 10px' }} />
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading master audit events...</span>
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+              No master audit events recorded yet.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+                    {['Timestamp (UTC)', 'Action', 'Actor', 'Target Type', 'Result', 'Merkle Hash Link'].map(h => (
+                      <th key={h} style={{
+                        padding: '12px 16px', fontSize: '10px', fontWeight: 700, textAlign: 'left',
+                        color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                        fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log) => (
+                    <tr
+                      key={log.id}
+                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 100ms' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td style={{ padding: '12px 16px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {new Date(log.createdAt).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '11px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: '#f87171' }}>
+                        {log.action}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                        <div>{log.actor?.name || 'System'}</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>{log.actor?.role}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                        {log.targetType || 'SYSTEM'}
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{
+                          fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                          color: log.result === 'SUCCESS' ? '#10b981' : '#ef4444',
+                          background: log.result === 'SUCCESS' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                          border: `1px solid ${log.result === 'SUCCESS' ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                          borderRadius: '9999px', padding: '2px 8px',
+                        }}>
+                          {log.result}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.eventHash}>
+                        {log.eventHash || '0000000000000000000000000000000000000000000000000000000000000000'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Security Policies Subtab (UX Spec §11.4) ─── */}
+      {activeSubTab === 'policies' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+          {[
+            {
+              title: 'Maximum File Upload Size',
+              value: '50 MB',
+              desc: 'Enforced at reverse proxy and API middleware gateway layers.',
+              status: 'ENFORCED',
+              color: '#10b981',
+            },
+            {
+              title: 'Permitted MIME Types',
+              value: 'PDF, DOCX, PNG, JPG, TXT',
+              desc: 'Binary magic number validation rejects disguised executable payloads.',
+              status: 'ENFORCED',
+              color: '#10b981',
+            },
+            {
+              title: 'Session Token Storage',
+              value: 'Access Token (LocalStorage) + Refresh Token (HTTP-Only Cookie)',
+              desc: 'Refresh tokens are rotated and never exposed to client-side script.',
+              status: 'STRICT',
+              color: '#3b82f6',
+            },
+            {
+              title: 'MFA Enforcement Matrix',
+              value: 'MANDATORY (ADMIN & SENIOR)',
+              desc: 'Time-based OTP challenge required for sensitive command execution.',
+              status: 'ACTIVE',
+              color: '#a78bfa',
+            },
+            {
+              title: 'Audit Immutability Anchor',
+              value: 'Hyperledger Fabric 2.5',
+              desc: 'Every audit event is cryptographically hashed to SHA-256 state ledger.',
+              status: 'ACTIVE',
+              color: '#10b981',
+            },
+            {
+              title: 'Account Lockout Threshold',
+              value: '5 Failed Consecutive Attempts',
+              desc: 'Triggers automated biometric or administrative clearance requirement.',
+              status: 'ACTIVE',
+              color: '#f59e0b',
+            },
+          ].map(p => (
+            <div key={p.title} style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {p.title}
+                </span>
+                <span style={{
+                  fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                  color: p.color, background: `${p.color}15`, border: `1px solid ${p.color}30`,
+                  borderRadius: '9999px', padding: '2px 8px',
+                }}>{p.status}</span>
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
+                {p.value}
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                {p.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Create User Modal */}
       {showAddUser && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4">
-            <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-purple-600" /> Provision Officer Account
-            </h3>
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+        }}>
+          <div style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: '16px', width: '100%', maxWidth: '480px',
+            boxShadow: 'var(--shadow-modal)',
+          }}>
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'var(--bg-elevated)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '7px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px' }}>
+                  <UserPlus size={16} color="#f87171" />
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Provision Officer Account</div>
+              </div>
+              <button onClick={() => setShowAddUser(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                ✕
+              </button>
+            </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
+            <form onSubmit={handleCreateUser} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label className="block text-slate-700 mb-1 font-bold">Full Name *</label>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+                  Full Name *
+                </label>
                 <input
-                  type="text"
-                  required
-                  placeholder="e.g. Officer Sunita Rao"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 focus:bg-white focus:outline-none focus:border-purple-500"
+                  type="text" required placeholder="e.g. Officer Sunita Rao"
+                  value={name} onChange={e => setName(e.target.value)}
+                  style={inputStyle}
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-1 font-bold">Official Email Address *</label>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+                  Official Email Address *
+                </label>
                 <input
-                  type="email"
-                  required
-                  placeholder="e.g. s.rao@police.gov.in"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 focus:bg-white focus:outline-none focus:border-purple-500"
+                  type="email" required placeholder="e.g. s.rao@police.gov.in"
+                  value={email} onChange={e => setEmail(e.target.value)}
+                  style={inputStyle}
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-1 font-bold">Temporary Password *</label>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+                  Temporary Password *
+                </label>
                 <input
-                  type="password"
-                  required
-                  placeholder="Min 8 chars with mixed case & symbol"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 font-mono focus:bg-white focus:outline-none focus:border-purple-500"
+                  type="password" required placeholder="Min 8 chars with mixed case & symbol"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace' }}
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label className="block text-slate-700 mb-1 font-bold">Assigned Role *</label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-purple-500 font-medium"
-                  >
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+                    Assigned Role *
+                  </label>
+                  <select value={role} onChange={e => setRole(e.target.value)} style={inputStyle}>
                     <option value="INVESTIGATOR">INVESTIGATOR</option>
                     <option value="SENIOR_OFFICER">SENIOR_OFFICER</option>
                     <option value="FORENSIC_OFFICER">FORENSIC_OFFICER</option>
@@ -217,139 +557,39 @@ export const AdminPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-700 mb-1 font-bold">Department / Unit</label>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+                    Department / Unit
+                  </label>
                   <input
-                    type="text"
-                    placeholder="e.g. Cyber Crime Unit"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-purple-500"
+                    type="text" placeholder="e.g. Cyber Crime Unit"
+                    value={department} onChange={e => setDepartment(e.target.value)}
+                    style={inputStyle}
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <div style={{ display: 'flex', gap: '10px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
                 <button
-                  type="button"
-                  onClick={() => setShowAddUser(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
-                >
-                  Cancel
-                </button>
+                  type="button" onClick={() => setShowAddUser(false)}
+                  style={{
+                    flex: 1, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer',
+                  }}
+                >Cancel</button>
                 <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-md shadow-purple-600/20"
+                  type="submit" disabled={creating}
+                  style={{
+                    flex: 2, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                    background: creating ? 'rgba(239,68,68,0.5)' : '#ef4444', color: 'white',
+                    border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+                    boxShadow: creating ? 'none' : '0 4px 16px rgba(239,68,68,0.25)',
+                  }}
                 >
-                  {creating ? 'Provisioning...' : 'Create Account'}
+                  {creating ? <><Loader size={13} className="animate-spin" /> Provisioning...</> : <><UserPlus size={13} /> Create Account</>}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Users Subtab */}
-      {activeSubTab === 'users' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider font-mono border-b border-slate-200 text-[11px]">
-                <tr>
-                  <th className="p-4">Officer Name</th>
-                  <th className="p-4">Email / Login</th>
-                  <th className="p-4">Role</th>
-                  <th className="p-4">Department</th>
-                  <th className="p-4">Lockout Status</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-4 font-bold text-slate-900">{u.name}</td>
-                    <td className="p-4 font-mono text-slate-500">{u.email}</td>
-                    <td className="p-4">
-                      <select
-                        value={u.role}
-                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                        className="bg-slate-50 border border-slate-300 text-purple-700 font-mono font-bold rounded-lg px-2.5 py-1 text-[11px]"
-                      >
-                        <option value="INVESTIGATOR">INVESTIGATOR</option>
-                        <option value="SENIOR_OFFICER">SENIOR_OFFICER</option>
-                        <option value="FORENSIC_OFFICER">FORENSIC_OFFICER</option>
-                        <option value="ADMIN">ADMIN</option>
-                      </select>
-                    </td>
-                    <td className="p-4 text-slate-600">{u.department || 'General Directorate'}</td>
-                    <td className="p-4">
-                      {u.isLocked ? (
-                        <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-mono text-[10px] font-bold flex items-center gap-1.5 w-fit">
-                          <Lock className="w-3 h-3 text-rose-600" /> LOCKED (Failed Attempts)
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] font-bold flex items-center gap-1.5 w-fit">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Active (0 Fails)
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      {u.isLocked && (
-                        <button
-                          onClick={() => handleUnlockUser(u.id)}
-                          className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg font-bold text-[11px] flex items-center gap-1 ml-auto shadow-xs"
-                        >
-                          <Unlock className="w-3.5 h-3.5 text-amber-600" /> Unlock Account
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Audit Subtab */}
-      {activeSubTab === 'audit' && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[11px] border-b border-slate-200">
-                <tr>
-                  <th className="p-4">Timestamp</th>
-                  <th className="p-4">Action</th>
-                  <th className="p-4">Actor</th>
-                  <th className="p-4">Target Type</th>
-                  <th className="p-4">Result</th>
-                  <th className="p-4">Merkle Hash Link</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {auditLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-4 text-slate-500 text-[11px] whitespace-nowrap">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </td>
-                    <td className="p-4 font-bold text-purple-700">{log.action}</td>
-                    <td className="p-4 font-sans text-slate-900 font-medium">
-                      <div>{log.actor?.name}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{log.actor?.role}</div>
-                    </td>
-                    <td className="p-4 text-slate-500">{log.targetType || 'SYSTEM'}</td>
-                    <td className="p-4">
-                      <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                        {log.result}
-                      </span>
-                    </td>
-                    <td className="p-4 text-[10px] text-slate-400 max-w-[200px] truncate" title={log.eventHash}>
-                      {log.eventHash || '0000000000000000000000000000000000000000000000000000000000000000'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}

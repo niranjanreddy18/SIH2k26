@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Box, ShieldCheck } from 'lucide-react';
+import { X, Box, ShieldCheck, Loader } from 'lucide-react';
 import api from '../services/api';
+import { useToast } from '../context/ToastContext';
 
 interface Props {
   caseId: string;
@@ -12,80 +13,91 @@ export const EvidenceModal: React.FC<Props> = ({ caseId, onClose, onSuccess }) =
   const [type, setType] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!type) return;
-
     setSubmitting(true);
     try {
       const res = await api.post(`/cases/${caseId}/evidence`, {
-        type,
-        description,
-        collectedAt: new Date().toISOString()
+        type, description, collectedAt: new Date().toISOString()
       });
-      if (res.data.success) {
-        onSuccess();
-        onClose();
-      }
+      if (res.data.success) { toast.success('Evidence registered.'); onSuccess(); onClose(); }
     } catch (err: any) {
-      alert('Failed to register evidence: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Failed to register evidence: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setSubmitting(false);
     }
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+    color: 'var(--text-primary)', borderRadius: '8px', padding: '9px 12px',
+    fontSize: '12px', outline: 'none',
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-2 text-emerald-700 font-bold text-lg">
-            <Box className="w-5 h-5" /> Register Physical/Digital Evidence
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+    }}>
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: '16px', width: '100%', maxWidth: '480px',
+        boxShadow: 'var(--shadow-modal)',
+      }}>
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--bg-elevated)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ padding: '7px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '8px' }}>
+              <Box size={16} color="#10b981" />
+            </div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Register Physical/Digital Evidence</div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleRegister} className="p-6 space-y-4 text-sm">
+        <form onSubmit={handleRegister} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Evidence Type / Item Name *</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Encrypted SSD 1TB (Serial #SSD-99482)"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-emerald-500"
-            />
+            <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+              Evidence Type / Item Name *
+            </label>
+            <input type="text" required placeholder="e.g. Encrypted SSD 1TB (Serial #SSD-99482)" value={type} onChange={e => setType(e.target.value)} style={inputStyle} />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Collection Details & Serial Specs</label>
+            <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>
+              Collection Details & Serial Specs
+            </label>
             <textarea
               rows={3}
               placeholder="Record exact scene location, seals, and forensic details..."
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-emerald-500 resize-none"
+              onChange={e => setDescription(e.target.value)}
+              style={{ ...inputStyle, resize: 'none', lineHeight: 1.5 }}
             />
           </div>
 
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              {submitting ? 'Registering...' : 'Register Evidence Item'}
+          <div style={{ display: 'flex', gap: '10px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+            <button type="button" onClick={onClose} style={{
+              flex: 1, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-secondary)', cursor: 'pointer',
+            }}>Cancel</button>
+            <button type="submit" disabled={submitting} style={{
+              flex: 2, padding: '10px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+              background: submitting ? 'rgba(16,185,129,0.5)' : '#10b981', color: 'white',
+              border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              boxShadow: submitting ? 'none' : '0 4px 16px rgba(16,185,129,0.25)',
+            }}>
+              {submitting ? <><Loader size={13} className="animate-spin" /> Registering...</> : <><ShieldCheck size={13} /> Register Evidence</>}
             </button>
           </div>
         </form>

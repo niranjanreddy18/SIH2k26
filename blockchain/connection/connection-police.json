@@ -1,0 +1,49 @@
+{
+  "name": "slidms-police-network",
+  "version": "1.0.0",
+  "client": {
+    "organization": "PoliceDept",
+    "connection": {
+      "timeout": {
+        "peer": {
+          "endorser": "300"
+        }
+      }
+    }
+  },
+  "organizations": {
+    "PoliceDept": {
+      "mspid": "PoliceDeptMSP",
+      "peers": [
+        "peer0.police.slidms.gov.in"
+      ],
+      "certificateAuthorities": [
+        "ca.police.slidms.gov.in"
+      ]
+    }
+  },
+  "peers": {
+    "peer0.police.slidms.gov.in": {
+      "url": "grpcs://localhost:7051",
+      "tlsCACerts": {
+        "path": "blockchain/organizations/peerOrganizations/police.slidms.gov.in/peers/peer0.police.slidms.gov.in/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.police.slidms.gov.in",
+        "hostnameOverride": "peer0.police.slidms.gov.in"
+      }
+    }
+  },
+  "certificateAuthorities": {
+    "ca.police.slidms.gov.in": {
+      "url": "https://localhost:7054",
+      "caName": "ca-police",
+      "tlsCACerts": {
+        "path": "blockchain/organizations/fabric-ca/police/ca-cert.pem"
+      },
+      "httpOptions": {
+        "verify": false
+      }
+    }
+  }
+}

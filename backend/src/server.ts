@@ -14,9 +14,11 @@ import evidenceRoutes from './routes/evidence.routes';
 import documentsRoutes from './routes/documents.routes';
 import blockchainRoutes from './routes/blockchain.routes';
 import adminRoutes from './routes/admin.routes';
+import usersRoutes from './routes/users.routes';
 import { errorHandler } from './middlewares/errorHandler';
 import { runMigrations } from './db/migrate';
 import { seedDatabase } from './db/seed';
+import { FabricService } from './services/fabric.service';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,6 +42,7 @@ app.use('/', evidenceRoutes);    // /cases/:caseId/evidence, /evidence/:id, /evi
 app.use('/', documentsRoutes);   // /cases/:caseId/documents, /documents/:id, /documents/:id/download
 app.use('/blockchain', blockchainRoutes);
 app.use('/admin', adminRoutes);
+app.use('/users', usersRoutes);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -47,6 +50,7 @@ app.get('/health', (_req, res) => {
     status: 'OK',
     system: 'SLIDMS Backend API',
     persistence: 'PostgreSQL',
+    blockchain: FabricService.getConnectionInfo(),
     timestamp: new Date().toISOString()
   });
 });
@@ -62,11 +66,15 @@ async function startServer() {
     console.log('🌱 Seeding database initial demo data...');
     await seedDatabase();
 
+    console.log('⛓️ Connecting to Hyperledger Fabric Gateway...');
+    await FabricService.connect();
+
     app.listen(PORT, () => {
       console.log(`=======================================================`);
       console.log(`🚀 SLIDMS Backend API Server running on port ${PORT}`);
       console.log(`📡 Contract Endpoints Ready: /auth, /cases, /documents, /evidence, /blockchain, /admin`);
       console.log(`🗄️ Persistence: PostgreSQL with cryptographic hash chaining`);
+      console.log(`⛓️ Blockchain: ${FabricService.isConnected() ? 'Hyperledger Fabric ✅' : 'PostgreSQL Fallback ⚠️'}`);
       console.log(`=======================================================`);
     });
   } catch (err: any) {

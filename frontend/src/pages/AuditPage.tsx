@@ -1,29 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle, Filter } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle, Filter, Loader, Link2 } from 'lucide-react';
 import api from '../services/api';
 import { AuditEvent, AuditVerifyChainResult } from '../types';
+import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 export const AuditPage: React.FC = () => {
+  const { user } = useAuth();
+  const toast = useToast();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [chainResult, setChainResult] = useState<AuditVerifyChainResult | null>(null);
   const [actionFilter, setActionFilter] = useState<string>('');
 
+  // ADMIN sees the system-wide master log. Other roles see the audit trail for
+  // their most recently active case — /admin/audit is ADMIN-only on the backend.
   const fetchAuditEvents = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
-      const url = actionFilter ? `/admin/audit?action=${actionFilter}` : `/admin/audit`;
-      const res = await api.get(url).catch(async () => {
-        const cRes = await api.get('/cases/aaaaaaaa-1111-1111-1111-111111111111/audit');
-        return cRes;
-      });
+      let res;
+      if (user?.role === 'ADMIN') {
+        const url = actionFilter ? `/admin/audit?action=${actionFilter}` : `/admin/audit`;
+        res = await api.get(url);
+      } else {
+        const casesRes = await api.get('/cases?limit=1');
+        const firstCase = casesRes.data.success ? casesRes.data.data.items?.[0] : null;
+        if (firstCase) {
+          const url = actionFilter
+            ? `/cases/${firstCase.id}/audit?action=${actionFilter}`
+            : `/cases/${firstCase.id}/audit`;
+          res = await api.get(url);
+        }
+      }
 
       if (res && res.data.success) {
         setEvents(res.data.data.items || []);
+      } else {
+        setEvents([]);
       }
-    } catch (err) {
-      console.error('Audit fetch error:', err);
+    } catch (err: any) {
+      setLoadError(true);
+      toast.error('Failed to load audit events: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -37,7 +57,7 @@ export const AuditPage: React.FC = () => {
         setChainResult(res.data.data);
       }
     } catch (err: any) {
-      alert('Chain verification failed: ' + (err.response?.data?.error?.message || err.message));
+      toast.error('Chain verification failed: ' + (err.response?.data?.error?.message || err.message));
     } finally {
       setVerifyingChain(false);
     }
@@ -48,57 +68,81 @@ export const AuditPage: React.FC = () => {
   }, [actionFilter]);
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+        gap: '16px', padding: '20px 24px',
+        background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(16,185,129,0.06) 100%)',
+        border: '1px solid var(--border)', borderRadius: '14px',
+      }}>
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <ShieldCheck className="w-6 h-6 text-blue-600" /> Tamper-Evident Audit Event Trail
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ShieldCheck size={22} color="#3b82f6" /> Tamper-Evident Audit Event Trail
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            End-to-end cryptographic hash chaining per Spec §21.1. Any database-level alteration breaks the hash chain.
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+            End-to-end cryptographic hash chaining. Any database-level alteration breaks the hash chain sequence.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
             onClick={handleVerifyChain}
             disabled={verifyingChain}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '9px 16px', borderRadius: '8px',
+              background: '#10b981', color: 'white', fontSize: '12px', fontWeight: 700,
+              cursor: 'pointer', border: 'none',
+              boxShadow: '0 4px 16px rgba(16,185,129,0.25)',
+              opacity: verifyingChain ? 0.6 : 1,
+            }}
           >
-            <ShieldCheck className={`w-4 h-4 ${verifyingChain ? 'animate-spin' : ''}`} />
+            <ShieldCheck size={14} className={verifyingChain ? 'animate-spin' : ''} />
             {verifyingChain ? 'Recomputing Hashes...' : 'Verify Full Hash Chain'}
           </button>
 
           <button
             onClick={fetchAuditEvents}
-            className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold flex items-center gap-2 shadow-xs"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px',
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              color: 'var(--text-secondary)', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+            }}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
       </div>
 
       {/* Hash Chain Verification Result Banner */}
       {chainResult && (
-        <div className={`p-5 rounded-2xl border flex items-start gap-4 shadow-xs ${
-          chainResult.status === 'CHAIN_INTACT'
-            ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-            : 'bg-rose-50 border-rose-300 text-rose-900'
-        }`}>
+        <div
+          className={`animate-fade-in ${chainResult.status === 'CHAIN_INTACT' ? 'animate-glow-green' : 'animate-glow-red animate-shake'}`}
+          style={{
+            padding: '18px 20px', borderRadius: '12px',
+            background: chainResult.status === 'CHAIN_INTACT' ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+            border: `1.5px solid ${chainResult.status === 'CHAIN_INTACT' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.5)'}`,
+            display: 'flex', alignItems: 'flex-start', gap: '14px',
+          }}
+        >
           {chainResult.status === 'CHAIN_INTACT' ? (
-            <ShieldCheck className="w-8 h-8 text-emerald-600 shrink-0 mt-0.5" />
+            <ShieldCheck size={28} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
           ) : (
-            <ShieldAlert className="w-8 h-8 text-rose-600 shrink-0 mt-0.5 animate-bounce" />
+            <ShieldAlert size={28} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px', animation: 'pulse 1s infinite' }} />
           )}
-          <div className="space-y-1">
-            <div className="text-sm font-bold tracking-wide flex items-center gap-2">
+          <div>
+            <div style={{
+              fontSize: '13px', fontWeight: 800, letterSpacing: '0.04em',
+              color: chainResult.status === 'CHAIN_INTACT' ? '#10b981' : '#ef4444',
+              textTransform: 'uppercase', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
               AUDIT LEDGER INTEGRITY: {chainResult.status}
-              <span className="text-xs font-mono font-normal opacity-80">
+              <span style={{ fontSize: '11px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', fontWeight: 'normal' }}>
                 ({chainResult.totalEvents} events verified sequentially)
               </span>
             </div>
-            <p className="text-xs opacity-90">
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               {chainResult.status === 'CHAIN_INTACT'
                 ? 'All historical audit entries match their cryptographic parent hashes. No out-of-band DB tampering detected.'
                 : `TAMPERING DETECTED! Hash chain broken at event ID ${chainResult.brokenAt}. Records after this point may be compromised.`}
@@ -108,13 +152,20 @@ export const AuditPage: React.FC = () => {
       )}
 
       {/* Filter Toolbar */}
-      <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 text-xs shadow-xs">
-        <Filter className="w-4 h-4 text-slate-400 ml-1" />
-        <span className="text-slate-600 font-bold">Filter by Action:</span>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '10px',
+        padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '10px',
+      }}>
+        <Filter size={14} color="var(--text-muted)" />
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>Filter by Action:</span>
         <select
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
-          className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500 font-mono text-xs font-medium"
+          style={{
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+            color: 'var(--text-primary)', borderRadius: '8px', padding: '6px 12px',
+            fontSize: '12px', outline: 'none', fontFamily: 'JetBrains Mono, monospace',
+          }}
         >
           <option value="">All Lifecycle Actions</option>
           <option value="USER_LOGIN">USER_LOGIN</option>
@@ -134,37 +185,77 @@ export const AuditPage: React.FC = () => {
       </div>
 
       {/* Audit Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden',
+      }}>
         {loading ? (
-          <div className="py-16 text-center text-xs text-slate-400">Loading tamper-evident audit records...</div>
+          <div style={{ padding: '48px', textAlign: 'center' }}>
+            <Loader size={24} color="#3b82f6" className="animate-spin" style={{ margin: '0 auto 10px' }} />
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading tamper-evident audit records...</span>
+          </div>
+        ) : loadError ? (
+          <div style={{ padding: '48px', textAlign: 'center' }}>
+            <AlertTriangle size={24} color="var(--danger)" style={{ margin: '0 auto 10px' }} />
+            <div style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '12px' }}>Could not load audit events.</div>
+            <button
+              onClick={fetchAuditEvents}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+                background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', color: 'var(--danger)', cursor: 'pointer',
+              }}
+            >
+              <RefreshCw size={13} /> Retry
+            </button>
+          </div>
         ) : events.length === 0 ? (
-          <div className="py-16 text-center text-xs text-slate-400">No audit events found matching the criteria.</div>
+          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+            No audit events found matching the criteria.
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[11px] border-b border-slate-200">
-                <tr>
-                  <th className="p-4">Timestamp (UTC)</th>
-                  <th className="p-4">Action</th>
-                  <th className="p-4">Officer / Actor</th>
-                  <th className="p-4">Target Type</th>
-                  <th className="p-4">Status</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+                  {['Timestamp (UTC)', 'Action', 'Officer / Actor', 'Target Type', 'Status'].map(h => (
+                    <th key={h} style={{
+                      padding: '12px 16px', fontSize: '10px', fontWeight: 700, textAlign: 'left',
+                      color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
+              <tbody>
                 {events.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-4 text-slate-500 text-[11px] whitespace-nowrap">
-                      {new Date(log.createdAt).toLocaleString()}
+                  <tr
+                    key={log.id}
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 100ms' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '12px 16px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {new Date(log.createdAt).toLocaleString('en-IN')}
                     </td>
-                    <td className="p-4 font-bold text-blue-600">{log.action}</td>
-                    <td className="p-4 font-sans text-slate-800 font-medium">
+                    <td style={{ padding: '12px 16px', fontSize: '11px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: '#60a5fa' }}>
+                      {log.action}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
                       <div>{log.actor?.name || 'Officer'}</div>
                     </td>
-                    <td className="p-4 text-slate-500">{log.targetType || 'SYSTEM'}</td>
-                    <td className="p-4">
-                      <span className="px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 flex items-center gap-1 w-fit">
-                        <CheckCircle2 className="w-3 h-3" /> {log.result}
+                    <td style={{ padding: '12px 16px', fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                      {log.targetType || 'SYSTEM'}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                        fontSize: '9px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                        color: log.result === 'SUCCESS' ? '#10b981' : '#ef4444',
+                        background: log.result === 'SUCCESS' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                        border: `1px solid ${log.result === 'SUCCESS' ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                        borderRadius: '9999px', padding: '2px 8px',
+                      }}>
+                        <CheckCircle2 size={10} /> {log.result}
                       </span>
                     </td>
                   </tr>
