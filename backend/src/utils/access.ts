@@ -16,7 +16,7 @@ export function isValidUuid(id: string): boolean {
  */
 export async function hasCaseAccess(caseId: string, user: AuthenticatedUser): Promise<boolean> {
   if (!isValidUuid(caseId)) return false;
-  if (user.role === 'ADMIN') return true;
+  if (user.role === 'ADMIN' || user.role === 'SENIOR_OFFICER') return true;
 
   const row = await pool.query(
     `SELECT 1 FROM cases WHERE id = $1 AND created_by = $2

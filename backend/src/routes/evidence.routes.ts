@@ -122,10 +122,10 @@ router.get('/evidence/:id', authenticateJWT, async (req: AuthRequest, res: Respo
   });
 });
 
-// ─── POST /evidence/:id/transfer — Custody transfer ──────────────────────────
+// ─── POST /evidence/:id/transfer — Custody transfer & Forensics handover ───
 router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { toUserId, reason } = req.body;
+  const { toUserId, reason, action = 'TRANSFERRED', status: requestedStatus, tamperSealNumber } = req.body;
   const user = req.user!;
 
   if (!toUserId) {
@@ -133,7 +133,7 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
   }
 
   const evRow = await pool.query(
-    `SELECT id, status, collected_by FROM evidence WHERE id = $1`, [id]
+    `SELECT id, case_id, type, status, collected_by FROM evidence WHERE id = $1`, [id]
   );
   if (!evRow.rows[0]) {
     return sendError(res, 'NOT_FOUND', `Evidence ${id} not found.`, 404);
@@ -142,38 +142,63 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
   // Current holder = whoever the most recent custody event transferred it to,
   // or the original collecting officer if it has never been transferred.
   const lastCustodyRow = await pool.query(
-    `SELECT to_user_id FROM evidence_custody_events WHERE evidence_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    `SELECT to_user_id, hash FROM evidence_custody_events WHERE evidence_id = $1 ORDER BY created_at DESC LIMIT 1`,
     [id]
   );
   const currentHolderId = lastCustodyRow.rows[0]?.to_user_id || evRow.rows[0].collected_by;
+  const prevHash = lastCustodyRow.rows[0]?.hash || '0'.repeat(64);
 
   if (currentHolderId !== user.id && user.role !== 'ADMIN' && user.role !== 'SENIOR_OFFICER') {
     return sendError(res, 'FORBIDDEN_CLASSIFICATION', 'Only the current custodian may transfer this evidence.', 403);
   }
 
   const recipientRow = await pool.query(
-    `SELECT id, name FROM users WHERE id = $1`, [toUserId]
+    `SELECT id, name, role FROM users WHERE id = $1`, [toUserId]
   );
   if (!recipientRow.rows[0]) {
     return sendError(res, 'NOT_FOUND', `Recipient user ${toUserId} not found.`, 404);
   }
 
+  const effectiveAction = String(action || 'TRANSFERRED').toUpperCase();
+  const fullReason = [
+    reason,
+    tamperSealNumber ? `Tamper Seal Verification: #${tamperSealNumber}` : null
+  ].filter(Boolean).join(' | ');
+
+  // Compute cryptographic SHA-256 hash linked to the previous custody event hash
+  const timestamp = new Date().toISOString();
   const custodyHash = CryptoService.calculateStringHash(
-    `TRANSFERRED${user.id}${toUserId}${id}${new Date().toISOString()}`
+    `${prevHash}${effectiveAction}${user.id}${toUserId}${id}${fullReason}${timestamp}`
   );
+
+  // Determine updated evidence status based on action or explicit requested status
+  let newStatus: string = requestedStatus || 'TRANSFERRED';
+  if (!requestedStatus) {
+    if (effectiveAction.includes('FORENSIC') || recipientRow.rows[0].role === 'FORENSIC_OFFICER') {
+      newStatus = 'ANALYZED';
+    } else if (effectiveAction.includes('VAULT') || effectiveAction.includes('STORE')) {
+      newStatus = 'STORED';
+    } else if (effectiveAction.includes('COURT')) {
+      newStatus = 'SUBMITTED';
+    } else if (effectiveAction.includes('RECEIVE')) {
+      newStatus = 'RECEIVED';
+    } else {
+      newStatus = 'TRANSFERRED';
+    }
+  }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO evidence_custody_events (id, evidence_id, from_user_id, to_user_id, action, reason, hash)
-       VALUES (uuid_generate_v4(), $1, $2, $3, 'TRANSFERRED', $4, $5)`,
-      [id, user.id, toUserId, reason || null, custodyHash]
+      `INSERT INTO evidence_custody_events (id, evidence_id, from_user_id, to_user_id, action, reason, hash, created_at)
+       VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, $6, $7)`,
+      [id, user.id, toUserId, effectiveAction, fullReason || 'Custody transfer', custodyHash, timestamp]
     );
 
     await client.query(
-      `UPDATE evidence SET status = 'TRANSFERRED'::evidence_status WHERE id = $1`, [id]
+      `UPDATE evidence SET status = $1::evidence_status WHERE id = $2`, [newStatus, id]
     );
 
     await client.query('COMMIT');
@@ -193,15 +218,19 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
     user.name,
     toUserId,
     recipientRow.rows[0].name,
-    reason || 'Custody transfer',
+    fullReason || effectiveAction,
     custodyHash
   ).catch(err => console.error('Fabric recordCustodyTransfer background error:', err.message));
 
   return sendSuccess(res, {
-    evidenceId: id, action: 'TRANSFERRED',
+    evidenceId: id,
+    action: effectiveAction,
+    status: newStatus,
+    hash: custodyHash,
     from: { id: user.id, name: user.name },
-    to: { id: recipientRow.rows[0].id, name: recipientRow.rows[0].name },
-    reason: reason || null,
+    to: { id: recipientRow.rows[0].id, name: recipientRow.rows[0].name, role: recipientRow.rows[0].role },
+    reason: fullReason || null,
+    createdAt: timestamp,
   });
 });
 

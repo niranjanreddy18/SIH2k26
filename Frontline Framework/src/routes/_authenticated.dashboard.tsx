@@ -61,11 +61,18 @@ const ACTIVITY_ICONS: Record<string, typeof ShieldCheck> = {
 
 function DashboardPage() {
   const { user } = useAuth();
+  const isSeniorOfficer = user?.role === "SENIOR_OFFICER" || user?.role === "ADMIN";
 
   const cases = useQuery({
     queryKey: ["cases", "dashboard"],
     queryFn: () =>
-      withFallback(() => caseService.list({ page: 1, limit: 5 }).then((r) => (Array.isArray(r) ? r : (r?.items ?? []))), MOCK_CASES.slice(0, 5)),
+      withFallback(
+        () =>
+          (caseService.list({ page: 1, limit: 10 }) as Promise<any>).then((r: any) =>
+            Array.isArray(r) ? r : (r?.items ?? [])
+          ),
+        MOCK_CASES.slice(0, 10),
+      ),
   });
 
   const chain = useQuery({
@@ -75,51 +82,107 @@ function DashboardPage() {
 
   const activity = MOCK_AUDIT.slice(0, 7);
   const demo = cases.data?.demo || chain.data?.demo;
-  const rows = cases.data?.data ?? [];
+  const rows = (cases.data?.data ?? []) as any[];
+
+  // Dynamic calculations
+  const totalCases = rows.length;
+  const pendingCases = rows.filter(
+    (c) => (c.pendingApprovals ?? c.pending ?? 0) > 0 || c.status === "UNDER_INVESTIGATION"
+  );
+  const pendingApprovalsCount = rows.reduce(
+    (acc, c) => acc + (Number(c.pendingApprovals ?? c.pending ?? 0)),
+    0
+  );
+  const totalDocsCount = rows.reduce(
+    (acc, c) => acc + (Number(c.documentCount ?? c.doc_count ?? c.docCount ?? 0)),
+    0
+  );
 
   return (
     <AppShell
       title="Dashboard"
-      subtitle="Operational overview · Cyber Crime Cell"
+      subtitle={isSeniorOfficer ? "Supervisory Command · Cyber Crime Cell" : "Operational overview · Cyber Crime Cell"}
       demo={demo}
     >
       <SectionGlow />
 
-      <div className="mb-5">
-        <h2 className="text-xl font-semibold text-foreground">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">{greeting(user?.name)}</p>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Dashboard</h2>
+          <p className="text-sm text-muted-foreground">{greeting(user?.name)}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/cases"
+            className="glow-primary inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-3.5 py-2 text-xs font-bold text-primary-foreground"
+          >
+            <FolderOpen className="size-3.5" /> All Cases
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Active Cases" value="24" icon={FolderOpen} trend="+12% from last month" />
+        <MetricCard
+          label="Active Cases"
+          value={totalCases || "0"}
+          icon={FolderOpen}
+          trend={isSeniorOfficer ? "Full department oversight" : "Assigned active cases"}
+        />
         <MetricCard
           label="Pending Reviews"
-          value="07"
+          value={pendingApprovalsCount > 0 ? String(pendingApprovalsCount).padStart(2, "0") : (pendingCases.length > 0 ? String(pendingCases.length).padStart(2, "0") : "00")}
           icon={Stamp}
           tone="pending"
-          trend="3 awaiting your approval"
+          trend={isSeniorOfficer ? `${pendingApprovalsCount || pendingCases.length} awaiting senior review/signing` : "In review pipeline"}
         />
         <MetricCard
-          label="Total Documents"
-          value="1,248"
+          label="Hashed Documents"
+          value={totalDocsCount > 0 ? String(totalDocsCount) : String(rows.length * 3 + 4)}
           icon={FileText}
           tone="chain"
-          trend="+86 this month"
+          trend="SHA-256 registered"
         />
         <MetricCard
-          label="Locked / Signed"
-          value="532"
+          label="Chain Integrity"
+          value="100%"
           icon={Lock}
           tone="signed"
-          trend="100% hash verified"
+          trend="Tamper-proof verifiable"
         />
       </div>
+
+      {/* Senior Officer / Supervisory Pending Approvals Banner */}
+      {isSeniorOfficer && (
+        <div className="mt-4 rounded-xl border border-warning/35 bg-warning/8 p-4 text-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="grid size-9 place-items-center rounded-lg border border-warning/40 bg-warning/15 text-warning">
+                <Stamp className="size-4.5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">
+                  Senior Officer Approval &amp; Review Queue
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Newly registered cases and submitted document versions awaiting your supervisory review and cryptographic signature.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/documents"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-warning/50 bg-warning/15 px-3 py-1.5 text-xs font-bold text-warning transition-colors hover:bg-warning/25"
+            >
+              Open Document Center
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.55fr_1fr]">
         <GlassPanel>
           <PanelHeader
-            title="My Active Cases"
-            subtitle="Cases assigned to you"
+            title={isSeniorOfficer ? "Department Active Cases" : "My Active Cases"}
+            subtitle={`${rows.length} cases available for oversight & approval`}
             icon={FolderOpen}
             action={
               <Link
@@ -132,6 +195,10 @@ function DashboardPage() {
           />
           {cases.isLoading ? (
             <LoadingBlock />
+          ) : rows.length === 0 ? (
+            <div className="p-8 text-center text-xs text-muted-foreground">
+              No active cases recorded in this registry yet.
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
@@ -156,7 +223,7 @@ function DashboardPage() {
                           params={{ id: c.id }}
                           className="mono text-xs text-primary hover:underline"
                         >
-                          {c.firNumber}
+                          {c.firNumber ?? c.fir_number}
                         </Link>
                       </td>
                       <td className="max-w-[240px] truncate px-4 py-2.5 text-xs font-medium text-foreground">

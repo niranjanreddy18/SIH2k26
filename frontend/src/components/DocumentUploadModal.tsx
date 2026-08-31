@@ -35,10 +35,7 @@ export const DocumentUploadModal: React.FC<Props> = ({ caseId, onClose, onSucces
       formData.append('name', name);
       formData.append('type', type);
       formData.append('classification', classification);
-      formData.append('file', file);
-      const res = await api.post(`/cases/${caseId}/documents`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post(`/cases/${caseId}/documents`, formData);
       if (res.data.success) {
         const doc = res.data.data;
         const hash = doc.hash || doc.sha256Hash || '';

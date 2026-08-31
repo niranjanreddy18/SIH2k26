@@ -8,6 +8,7 @@ import { AppShell } from "@/components/slidms/AppShell";
 import { ClassificationBadge, DocumentStatusBadge } from "@/components/slidms/badges";
 import { EmptyState, GlassPanel, LoadingBlock, MetricCard, SectionGlow } from "@/components/slidms/panels";
 import { SecureDocumentViewer } from "@/components/slidms/SecureDocumentViewer";
+import { UploadDocumentDialog } from "@/components/slidms/UploadDocumentDialog";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,7 @@ function DocumentsPage() {
   const [type, setType] = useState("ALL");
   const [selectedCaseId, setSelectedCaseId] = useState<string>("ALL");
   const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const casesQuery = useQuery({
     queryKey: ["cases", "list"],
@@ -146,8 +148,8 @@ function DocumentsPage() {
           </p>
         </div>
         <button
-          onClick={() => toast.info("Open a case workspace to upload a new document version.")}
-          className="glow-primary inline-flex h-9 items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-3.5 text-xs font-semibold text-primary-foreground"
+          onClick={() => setUploadOpen(true)}
+          className="glow-primary inline-flex h-9 items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-3.5 text-xs font-semibold text-primary-foreground transition-transform active:scale-95"
         >
           <Upload className="size-4" /> Upload Document
         </button>
@@ -305,6 +307,14 @@ function DocumentsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* Global Document Upload Dialog */}
+      <UploadDocumentDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        caseId={selectedCaseId !== "ALL" ? selectedCaseId : undefined}
+        cases={cases}
+      />
     </AppShell>
   );
 }

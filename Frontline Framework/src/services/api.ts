@@ -61,12 +61,8 @@ export async function get<T>(url: string, params?: Record<string, unknown>): Pro
   return res.data.data;
 }
 
-export async function post<T>(url: string, body?: unknown, isForm = false): Promise<T> {
-  const res = await api.post<ApiEnvelope<T>>(
-    url,
-    body,
-    isForm ? { headers: { "Content-Type": "multipart/form-data" } } : undefined,
-  );
+export async function post<T>(url: string, body?: unknown, _isForm = false): Promise<T> {
+  const res = await api.post<ApiEnvelope<T>>(url, body);
   return res.data.data;
 }
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowRightLeft, FileStack, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRightLeft, Box, FileStack, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ import {
   PanelHeader,
   SectionGlow,
 } from "@/components/slidms/panels";
+import { RegisterEvidenceDialog } from "@/components/slidms/RegisterEvidenceDialog";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,7 @@ function EvidencePage() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>("ALL");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [registerOpen, setRegisterOpen] = useState(false);
 
   const casesQuery = useQuery({
     queryKey: ["cases", "list"],
@@ -77,36 +79,57 @@ function EvidencePage() {
                   return items.map((ev: any) => ({
                     ...ev,
                     caseId: ev.caseId ?? cs.id,
-                    caseFir: cs.firNumber ?? cs.fir_number ?? cs.id,
+                    caseFir: cs.firNumber ?? cs.fir_number ?? cs.title,
                   }));
                 }),
-              MOCK_EVIDENCE.filter((e) => e.caseId === cs.id),
+              MOCK_EVIDENCE.map((e) => ({
+                ...e,
+                caseId: cs.id,
+                caseFir: cs.firNumber ?? cs.fir_number ?? cs.title,
+              })),
             ),
           ),
         );
-        return { data: results.flatMap((r) => r.data ?? []), demo: results[0]?.demo };
+        return results.flatMap((r) => r.data ?? []);
       }
-
-      const caseIdToFetch = selectedCaseId !== "ALL" ? selectedCaseId : cases[0]?.id || MOCK_CASES[0]!.id;
-      return withFallback(
-        () => (evidenceService.list(caseIdToFetch) as Promise<any>).then((r: any) => (Array.isArray(r) ? r : (r?.items ?? []))),
-        MOCK_EVIDENCE,
+      const targetCase = cases.find((c: any) => c.id === selectedCaseId);
+      const res = await withFallback(
+        () =>
+          (evidenceService.list(selectedCaseId) as Promise<any>).then((r: any) => {
+            const items = Array.isArray(r) ? r : (r?.items ?? []);
+            return items.map((ev: any) => ({
+              ...ev,
+              caseId: ev.caseId ?? selectedCaseId,
+              caseFir: targetCase?.firNumber ?? targetCase?.fir_number ?? targetCase?.title ?? "Case",
+            }));
+          }),
+        MOCK_EVIDENCE.map((e) => ({
+          ...e,
+          caseId: selectedCaseId,
+          caseFir: targetCase?.firNumber ?? targetCase?.fir_number ?? targetCase?.title ?? "Case",
+        })),
       );
+      return res.data ?? [];
     },
     enabled: cases.length > 0 || selectedCaseId !== "ALL",
   });
 
-  const allItems = (list.data?.data ?? []) as (EvidenceItem & { caseFir?: string })[];
+  const allItems: any[] = useMemo(() => {
+    const raw = list.data;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === "object" && Array.isArray((raw as any).items)) return (raw as any).items;
+    return MOCK_EVIDENCE;
+  }, [list.data]);
 
-  const items = useMemo<(EvidenceItem & { caseFir?: string })[]>(() => {
+  const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return allItems.filter((e: any) => {
-      const type = String(e.type ?? "").toLowerCase();
-      const desc = String(e.description ?? "").toLowerCase();
-      const collector = String(e.collectedBy?.name ?? "").toLowerCase();
-      const status = String(e.status ?? "").toLowerCase();
-      const id = String(e.id ?? "").toLowerCase();
-      const fir = String(e.caseFir ?? e.caseId ?? "").toLowerCase();
+    return allItems.filter((e) => {
+      const type = (e.type ?? "").toLowerCase();
+      const desc = (e.description ?? "").toLowerCase();
+      const collector = (e.collectedBy ?? e.collected_by ?? "").toLowerCase();
+      const status = (e.status ?? "").toLowerCase();
+      const id = (e.id ?? "").toLowerCase();
+      const fir = (e.caseFir ?? "").toLowerCase();
 
       const matchQ =
         !q ||
@@ -145,11 +168,20 @@ function EvidencePage() {
     <AppShell title="Evidence" subtitle="Chain of custody register" demo={list.data?.demo}>
       <SectionGlow />
 
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-foreground">Evidence &amp; Chain of Custody</h2>
-        <p className="text-sm text-muted-foreground">
-          Every handover is hash-linked to the previous custody event
-        </p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Evidence &amp; Chain of Custody</h2>
+          <p className="text-sm text-muted-foreground">
+            Every handover is hash-linked to the previous custody event
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setRegisterOpen(true)}
+          className="glow-primary inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-chain to-primary px-3.5 py-2 text-xs font-bold text-white transition-transform active:scale-95"
+        >
+          <Plus className="size-3.5" /> Register Evidence
+        </button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
@@ -187,11 +219,20 @@ function EvidencePage() {
           {list.isLoading ? (
             <LoadingBlock label="Loading evidence register" />
           ) : items.length === 0 ? (
-            <EmptyState
-              icon={FileStack}
-              title="No evidence registered"
-              description="Register evidence from a case workspace to begin custody tracking."
-            />
+            <div className="p-10 text-center">
+              <FileStack className="mx-auto size-10 text-muted-foreground opacity-40" />
+              <p className="mt-3 text-sm font-semibold text-foreground">No evidence registered</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Register evidence to begin cryptographic custody tracking.
+              </p>
+              <button
+                type="button"
+                onClick={() => setRegisterOpen(true)}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-chain/50 bg-chain/15 px-3.5 py-1.5 text-xs font-bold text-chain transition-colors hover:bg-chain/25"
+              >
+                <Plus className="size-3.5" /> Register Evidence Item
+              </button>
+            </div>
           ) : (
             <div className="divide-y divide-border/50">
               {items.map((e: any) => (
@@ -281,6 +322,13 @@ function EvidencePage() {
       </div>
 
       <TransferDialog id={transferFor} onClose={() => setTransferFor(null)} />
+
+      <RegisterEvidenceDialog
+        open={registerOpen}
+        onOpenChange={setRegisterOpen}
+        caseId={selectedCaseId !== "ALL" ? selectedCaseId : undefined}
+        cases={cases}
+      />
     </AppShell>
   );
 }

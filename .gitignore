@@ -56,8 +56,6 @@ backend/certs/
 **/certs/
 
 # ─── Local storage & file uploads ────────────────────────────────────────────
-storage_data/
-**/storage_data/
 uploads/
 **/uploads/
 temp/

@@ -3,6 +3,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
   AlertTriangle,
+  Box,
   Clock,
   Download,
   Eye,
@@ -17,6 +18,7 @@ import {
   ShieldOff,
   Stamp,
   Trash2,
+  Upload,
   UserMinus,
   UserPlus,
   Users,
@@ -42,6 +44,8 @@ import {
   SectionGlow,
 } from "@/components/slidms/panels";
 import { SecureDocumentViewer } from "@/components/slidms/SecureDocumentViewer";
+import { UploadDocumentDialog } from "@/components/slidms/UploadDocumentDialog";
+import { RegisterEvidenceDialog } from "@/components/slidms/RegisterEvidenceDialog";
 import {
   Dialog,
   DialogContent,
@@ -130,7 +134,9 @@ function CaseDetailPage() {
   const [tab, setTab] = useState("overview");
   const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
 
-  // Sharing & Assignment Modals
+  // Modals & Actions
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
 
@@ -354,34 +360,52 @@ function CaseDetailPage() {
           </div>
 
           <div className="flex flex-col items-end gap-2.5">
-            {/* Management actions — only for assigned managers / admins */}
-            {canManageCase && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTab("access");
-                    setAssignOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
-                >
-                  <UserPlus className="size-3.5" /> Assign Officer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTab("access");
-                    if (documents.length > 0 && documents[0]?.id) {
-                      setShareDocId(documents[0].id);
-                    }
-                    setShareDocOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-chain/40 bg-chain/10 px-2.5 py-1.5 text-xs font-semibold text-chain transition-colors hover:bg-chain/20"
-                >
-                  <Share2 className="size-3.5" /> Share Document
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                className="glow-primary inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-3 py-1.5 text-xs font-bold text-primary-foreground transition-transform active:scale-95"
+              >
+                <Upload className="size-3.5" /> Upload Document
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEvidenceOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-chain/50 bg-chain/15 px-3 py-1.5 text-xs font-bold text-chain transition-colors hover:bg-chain/25 active:scale-95"
+              >
+                <Box className="size-3.5" /> Register Evidence
+              </button>
+
+              {/* Management actions — only for assigned managers / admins */}
+              {canManageCase && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab("access");
+                      setAssignOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
+                  >
+                    <UserPlus className="size-3.5" /> Assign Officer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTab("access");
+                      if (documents.length > 0 && documents[0]?.id) {
+                        setShareDocId(documents[0].id);
+                      }
+                      setShareDocOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-chain/40 bg-chain/10 px-2.5 py-1.5 text-xs font-semibold text-chain transition-colors hover:bg-chain/20"
+                  >
+                    <Share2 className="size-3.5" /> Share Document
+                  </button>
+                </>
+              )}
+            </div>
 
             <div className="flex flex-wrap justify-end gap-1.5">
               {assignmentRows.map((a) => (
@@ -466,92 +490,131 @@ function CaseDetailPage() {
               subtitle={`${documents.length} documents · version controlled`}
               icon={FileText}
               action={
-                <Link
-                  to="/documents"
-                  className="rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Document center
-                </Link>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUploadOpen(true)}
+                    className="glow-primary inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-3 py-1.5 text-xs font-bold text-primary-foreground transition-transform active:scale-95"
+                  >
+                    <Upload className="size-3.5" /> Upload Document
+                  </button>
+                  <Link
+                    to="/documents"
+                    className="rounded-md border border-border px-2.5 py-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    Document center
+                  </Link>
+                </div>
               }
             />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-sm">
-                <thead>
-                  <tr className="border-b border-border text-[10px] uppercase tracking-wider text-subtle">
-                    <th className="px-4 py-2.5 text-left font-semibold">Document</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Type</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Status</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Classification</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">Ver.</th>
-                    <th className="px-4 py-2.5 text-left font-semibold">SHA-256</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Updated</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {documents.map((d) => (
-                    <tr
-                      key={d.id}
-                      className="border-b border-border/50 transition-colors last:border-0 hover:bg-primary/6"
-                    >
-                      <td className="max-w-[260px] px-4 py-3">
-                        <Link
-                          to="/documents/$docId"
-                          params={{ docId: d.id }}
-                          className="block truncate text-xs font-medium text-foreground hover:text-primary"
-                        >
-                          {d.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-[11px] text-muted-foreground">
-                        {titleCase(d.type ?? "")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <DocumentStatusBadge status={d.currentVersion?.status ?? "DRAFT"} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <ClassificationBadge classification={d.classification} />
-                      </td>
-                      <td className="mono px-4 py-3 text-[11px] text-muted-foreground">
-                        v{d.currentVersion?.versionNo ?? 1}
-                      </td>
-                      <td className="mono px-4 py-3 text-[11px] text-chain">
-                        {shortHash(d.currentVersion?.hash, 6)}
-                      </td>
-                      <td className="mono px-4 py-3 text-right text-[11px] text-muted-foreground">
-                        {relativeTime(d.currentVersion?.createdAt ?? d.createdAt)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewDoc(d)}
-                            className="inline-flex items-center gap-1 rounded-md border border-primary/35 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
-                            title="Preview document in secure viewer"
-                          >
-                            <Eye className="size-3" /> Preview
-                          </button>
-                          <a
-                            href={fileUrl(documentService.downloadPath(d.id))}
-                            className="inline-flex items-center rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-background-raised hover:text-foreground"
-                            title="Download file"
-                          >
-                            <Download className="size-3" />
-                          </a>
-                        </div>
-                      </td>
+            {documents.length === 0 ? (
+              <div className="p-12 text-center">
+                <FileText className="mx-auto size-10 text-muted-foreground opacity-40" />
+                <p className="mt-3 text-sm font-semibold text-foreground">No documents uploaded to this case yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Upload initial FIR, seizure memos, witness statements, or investigation reports.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setUploadOpen(true)}
+                  className="glow-primary mt-4 inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-4 py-2 text-xs font-bold text-primary-foreground"
+                >
+                  <Upload className="size-3.5" /> Upload First Document
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-[10px] uppercase tracking-wider text-subtle">
+                      <th className="px-4 py-2.5 text-left font-semibold">Document</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Type</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Status</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Classification</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">Ver.</th>
+                      <th className="px-4 py-2.5 text-left font-semibold">SHA-256</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Updated</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {documents.map((d) => (
+                      <tr
+                        key={d.id}
+                        className="border-b border-border/50 transition-colors last:border-0 hover:bg-primary/6"
+                      >
+                        <td className="max-w-[260px] px-4 py-3">
+                          <Link
+                            to="/documents/$docId"
+                            params={{ docId: d.id }}
+                            className="block truncate text-xs font-medium text-foreground hover:text-primary"
+                          >
+                            {d.name}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-[11px] text-muted-foreground">
+                          {titleCase(d.type ?? "")}
+                        </td>
+                        <td className="px-4 py-3">
+                          <DocumentStatusBadge status={d.currentVersion?.status ?? "DRAFT"} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <ClassificationBadge classification={d.classification} />
+                        </td>
+                        <td className="mono px-4 py-3 text-[11px] text-muted-foreground">
+                          v{d.currentVersion?.versionNo ?? 1}
+                        </td>
+                        <td className="mono px-4 py-3 text-[11px] text-chain">
+                          {shortHash(d.currentVersion?.hash, 6)}
+                        </td>
+                        <td className="mono px-4 py-3 text-right text-[11px] text-muted-foreground">
+                          {relativeTime(d.currentVersion?.createdAt ?? d.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewDoc(d)}
+                              className="inline-flex items-center gap-1 rounded-md border border-primary/35 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+                              title="Preview document in secure viewer"
+                            >
+                              <Eye className="size-3" /> Preview
+                            </button>
+                            <a
+                              href={fileUrl(documentService.downloadPath(d.id))}
+                              className="inline-flex items-center rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-background-raised hover:text-foreground"
+                              title="Download file"
+                            >
+                              <Download className="size-3" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </GlassPanel>
         </TabsContent>
 
         {/* EVIDENCE TAB */}
         <TabsContent value="evidence">
           <GlassPanel>
-            <PanelHeader title="Evidence Register" subtitle="Chain of custody tracked" icon={FileStack} />
+            <PanelHeader
+              title="Evidence Register"
+              subtitle={`${evidenceRows.length} items · chain of custody tracked`}
+              icon={FileStack}
+              action={
+                <button
+                  type="button"
+                  onClick={() => setEvidenceOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-chain/50 bg-chain/15 px-3 py-1.5 text-xs font-bold text-chain transition-colors hover:bg-chain/25 active:scale-95"
+                >
+                  <Box className="size-3.5" /> Register Evidence
+                </button>
+              }
+            />
             <div className="divide-y divide-border/50">
               {evidenceRows.map((e) => (
                 <div key={e.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
@@ -568,9 +631,20 @@ function CaseDetailPage() {
                 </div>
               ))}
               {evidenceRows.length === 0 ? (
-                <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                  No evidence registered for this case yet.
-                </p>
+                <div className="p-12 text-center">
+                  <Box className="mx-auto size-10 text-muted-foreground opacity-40" />
+                  <p className="mt-3 text-sm font-semibold text-foreground">No physical or digital evidence registered yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Register seized devices, weapons, documents, or biological samples to establish tamper-evident chain of custody.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setEvidenceOpen(true)}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-chain/50 bg-chain/15 px-4 py-2 text-xs font-bold text-chain transition-colors hover:bg-chain/25"
+                  >
+                    <Box className="size-3.5" /> Register First Evidence Item
+                  </button>
+                </div>
               ) : null}
             </div>
           </GlassPanel>
@@ -943,6 +1017,20 @@ function CaseDetailPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* 4. Upload Case Document Dialog */}
+      <UploadDocumentDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        caseId={id}
+      />
+
+      {/* 5. Register Evidence Item Dialog */}
+      <RegisterEvidenceDialog
+        open={evidenceOpen}
+        onOpenChange={setEvidenceOpen}
+        caseId={id}
+      />
     </AppShell>
   );
 }

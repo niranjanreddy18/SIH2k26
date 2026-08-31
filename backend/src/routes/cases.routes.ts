@@ -60,7 +60,7 @@ router.get('/', authenticateJWT, async (req: AuthRequest, res: Response): Promis
 
   if (status) { params.push(status); conditions.push(`c.status = $${params.length}::case_status`); }
   if (cls)    { params.push(cls);    conditions.push(`c.classification = $${params.length}::classification_tier`); }
-  if (user.role !== 'ADMIN') {
+  if (user.role !== 'ADMIN' && user.role !== 'SENIOR_OFFICER') {
     params.push(user.id);
     conditions.push(
       `(c.created_by = $${params.length} OR EXISTS (
