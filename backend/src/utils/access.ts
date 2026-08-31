@@ -1,6 +1,12 @@
 import { pool } from '../db/pool';
 import { AuthenticatedUser } from '../middlewares/auth';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidUuid(id: string): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+}
+
 /**
  * Whether a user may create/modify data scoped to a case: ADMIN, the case's
  * creator, or an officer formally assigned to it via case_assignments.
@@ -9,6 +15,7 @@ import { AuthenticatedUser } from '../middlewares/auth';
  * tamper-demo, share creation) call this.
  */
 export async function hasCaseAccess(caseId: string, user: AuthenticatedUser): Promise<boolean> {
+  if (!isValidUuid(caseId)) return false;
   if (user.role === 'ADMIN') return true;
 
   const row = await pool.query(

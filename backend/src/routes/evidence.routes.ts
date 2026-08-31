@@ -29,11 +29,22 @@ router.post('/cases/:caseId/evidence', authenticateJWT, async (req: AuthRequest,
   }
 
   const id = uuidv4();
+  const collectedTimestamp = collectedAt || new Date().toISOString();
   const row = await pool.query(
     `INSERT INTO evidence (id, case_id, type, description, status, collected_by, collected_at)
      VALUES ($1, $2, $3, $4, 'REGISTERED'::evidence_status, $5, $6)
      RETURNING id, case_id, type, description, status, collected_at`,
-    [id, caseId, type, description || null, user.id, collectedAt || new Date().toISOString()]
+    [id, caseId, type, description || null, user.id, collectedTimestamp]
+  );
+
+  // ── Record initial intake in evidence_custody_events so timeline is complete ──
+  const initialHash = CryptoService.calculateStringHash(
+    `REGISTERED${user.id}${id}${collectedTimestamp}`
+  );
+  await pool.query(
+    `INSERT INTO evidence_custody_events (id, evidence_id, from_user_id, to_user_id, action, reason, hash, created_at)
+     VALUES (uuid_generate_v4(), $1, NULL, $2, 'COLLECTED', 'Initial evidence intake and registration into evidence vault', $3, $4)`,
+    [id, user.id, initialHash, collectedTimestamp]
   );
 
   await logAuditEvent(user.id, 'EVIDENCE_REGISTERED', 'EVIDENCE', id);
@@ -194,17 +205,24 @@ router.post('/evidence/:id/transfer', authenticateJWT, async (req: AuthRequest, 
   });
 });
 
-// ─── GET /evidence/:id/custody — Ordered chain of custody timeline ────────────
-router.get('/evidence/:id/custody', authenticateJWT, async (req: AuthRequest, res: Response): Promise<any> => {
+// ─── GET /evidence/:id/custody & /evidence/:id/timeline — Custody timeline ────
+const getEvidenceCustodyHandler = async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
 
-  const evRow = await pool.query(`SELECT id, case_id FROM evidence WHERE id = $1`, [id]);
+  const evRow = await pool.query(
+    `SELECT e.id, e.case_id, e.type, e.description, e.status, e.collected_at,
+            u.id AS cb_id, u.name AS cb_name
+     FROM evidence e
+     JOIN users u ON e.collected_by = u.id
+     WHERE e.id = $1`,
+    [id]
+  );
   if (!evRow.rows[0] || !(await hasCaseAccess(evRow.rows[0].case_id, req.user!))) {
     return sendError(res, 'NOT_FOUND', `Evidence ${id} not found.`, 404);
   }
 
   const rows = await pool.query(
-    `SELECT ce.id, ce.action, ce.reason, ce.created_at,
+    `SELECT ce.id, ce.action, ce.reason, ce.hash, ce.created_at,
             fu.id AS from_id, fu.name AS from_name,
             tu.id AS to_id,   tu.name AS to_name
      FROM evidence_custody_events ce
@@ -215,13 +233,44 @@ router.get('/evidence/:id/custody', authenticateJWT, async (req: AuthRequest, re
     [id]
   );
 
-  const items = rows.rows.map(c => ({
-    id: c.id, action: c.action, reason: c.reason, createdAt: c.created_at,
+  let items = rows.rows.map(c => ({
+    id: c.id,
+    action: c.action,
+    reason: c.reason,
+    hash: c.hash,
+    createdAt: c.created_at,
     from: c.from_id ? { id: c.from_id, name: c.from_name } : null,
-    to:   { id: c.to_id, name: c.to_name },
+    to: { id: c.to_id, name: c.to_name },
+    fromUser: c.from_id ? { id: c.from_id, name: c.from_name } : null,
+    toUser: { id: c.to_id, name: c.to_name },
   }));
 
+  // If no custody events exist yet (e.g. legacy evidence intake before audit trigger),
+  // return the initial collection event from the evidence record
+  if (items.length === 0) {
+    const e = evRow.rows[0];
+    const initialHash = CryptoService.calculateStringHash(
+      `REGISTERED${e.cb_id}${e.id}${e.collected_at}`
+    );
+    items = [
+      {
+        id: e.id,
+        action: 'COLLECTED',
+        reason: 'Initial evidence intake and registration into evidence vault',
+        hash: initialHash,
+        createdAt: e.collected_at,
+        from: null,
+        to: { id: e.cb_id, name: e.cb_name },
+        fromUser: null,
+        toUser: { id: e.cb_id, name: e.cb_name },
+      },
+    ];
+  }
+
   return sendSuccess(res, { evidenceId: id, items });
-});
+};
+
+router.get('/evidence/:id/custody', authenticateJWT, getEvidenceCustodyHandler);
+router.get('/evidence/:id/timeline', authenticateJWT, getEvidenceCustodyHandler);
 
 export default router;

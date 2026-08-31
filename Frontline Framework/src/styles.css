@@ -1,0 +1,385 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * SLIDMS design system — dark navy government command-center.
+ * All colors are semantic tokens. Never hardcode hex/utility colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-background-deep: var(--background-deep);
+  --color-background-raised: var(--background-raised);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-panel: var(--panel);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-bright: var(--primary-bright);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+
+  --color-verified: var(--verified);
+  --color-pending: var(--pending);
+  --color-danger: var(--danger);
+  --color-signed: var(--signed);
+  --color-chain: var(--chain);
+
+  --color-chart-1: var(--primary);
+  --color-chart-2: var(--verified);
+  --color-chart-3: var(--pending);
+  --color-chart-4: var(--signed);
+  --color-chart-5: var(--chain);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Light theme — daylight command center: porcelain surfaces, navy ink, brass accents */
+:root {
+  --radius: 0.75rem;
+
+  --background: #f4f6fb;
+  --background-deep: #e7ecf5;
+  --background-raised: #ffffff;
+  --foreground: #101d33;
+
+  --card: #ffffff;
+  --card-foreground: #101d33;
+  --panel: rgba(255, 255, 255, 0.9);
+  --popover: #ffffff;
+  --popover-foreground: #101d33;
+
+  --primary: #1b3a6b;
+  --primary-foreground: #f7f9fd;
+  --primary-bright: #2f5fa8;
+
+  --secondary: #e6ecf7;
+  --secondary-foreground: #17263f;
+
+  --muted: #eaeff8;
+  --muted-foreground: #46587a;
+  --subtle: #5a6b8a;
+
+  --accent: #f0e6d2;
+  --accent-foreground: #4a3711;
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #fdf6f6;
+
+  --border: rgba(27, 58, 107, 0.16);
+  --border-strong: rgba(27, 58, 107, 0.36);
+  --input: rgba(27, 58, 107, 0.2);
+  --ring: rgba(47, 95, 168, 0.6);
+
+  --verified: #0f766e;
+  --pending: #a16207;
+  --danger: #b91c1c;
+  --signed: #6d28d9;
+  --chain: #b08324;
+
+  --sidebar: #f8fafd;
+  --sidebar-foreground: #35476a;
+  --sidebar-primary: #1b3a6b;
+  --sidebar-primary-foreground: #f7f9fd;
+  --sidebar-accent: #e6ecf7;
+  --sidebar-accent-foreground: #101d33;
+  --sidebar-border: rgba(27, 58, 107, 0.14);
+  --sidebar-ring: rgba(47, 95, 168, 0.6);
+
+  --backdrop-opacity: 0.1;
+  --backdrop-veil: 0.78;
+}
+
+
+/* Dark theme — night command center (product default) */
+.dark {
+  color-scheme: dark;
+
+  --background: #07111f;
+  --background-deep: #050b16;
+  --background-raised: #0a1424;
+  --foreground: #f8fafc;
+
+  --card: #0b1626;
+  --card-foreground: #f8fafc;
+  --panel: rgba(12, 27, 46, 0.78);
+  --popover: #0e1b2d;
+  --popover-foreground: #f8fafc;
+
+  --primary: #3b82f6;
+  --primary-foreground: #f8fafc;
+  --primary-bright: #2563eb;
+
+  --secondary: #0e1b2d;
+  --secondary-foreground: #e2e8f0;
+
+  --muted: #0e1b2d;
+  --muted-foreground: #a7b6c9;
+  --subtle: #8496ad;
+
+
+  --accent: #12233a;
+  --accent-foreground: #f8fafc;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #f8fafc;
+
+  --border: rgba(96, 165, 250, 0.18);
+  --border-strong: rgba(96, 165, 250, 0.38);
+  --input: rgba(96, 165, 250, 0.22);
+  --ring: rgba(59, 130, 246, 0.6);
+
+  --verified: #10b981;
+  --pending: #f59e0b;
+  --danger: #ef4444;
+  --signed: #a78bfa;
+  --chain: #818cf8;
+
+  --sidebar: #0a1424;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #12233a;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgba(96, 165, 250, 0.18);
+  --sidebar-ring: rgba(59, 130, 246, 0.6);
+
+  --backdrop-opacity: 0.4;
+  --backdrop-veil: 0.55;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  /* Accessible, theme-aware focus ring for every interactive element. */
+  :where(a, button, input, select, textarea, summary, [role="button"], [role="switch"], [tabindex]):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* High-contrast safeguards */
+  @media (prefers-contrast: more) {
+    :root {
+      --muted-foreground: #33415a;
+      --subtle: #3d4c66;
+      --border: rgba(29, 78, 216, 0.45);
+      --border-strong: rgba(29, 78, 216, 0.75);
+    }
+    .dark {
+      --muted-foreground: #d6dfeb;
+      --subtle: #b6c3d4;
+      --border: rgba(147, 197, 253, 0.5);
+      --border-strong: rgba(147, 197, 253, 0.8);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  }
+
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--background-deep);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--primary) 45%, transparent);
+  }
+}
+
+/* Backdrop image opacity + veil, theme aware */
+@utility backdrop-image {
+  opacity: var(--backdrop-opacity);
+}
+
+@utility backdrop-veil {
+  background-color: color-mix(
+    in srgb,
+    var(--background) calc(var(--backdrop-veil) * 100%),
+    transparent
+  );
+}
+
+/* Context-specific section washes — differentiate sections, same layout. */
+@utility section-wash-dashboard {
+  background:
+    radial-gradient(900px 480px at 12% -5%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 70%),
+    radial-gradient(760px 420px at 92% 8%, color-mix(in srgb, var(--chain) 16%, transparent), transparent 72%);
+}
+
+@utility section-wash-cases {
+  background:
+    radial-gradient(880px 460px at 88% -6%, color-mix(in srgb, var(--pending) 18%, transparent), transparent 70%),
+    radial-gradient(700px 420px at 6% 22%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 72%);
+}
+
+@utility section-wash-documents {
+  background:
+    radial-gradient(880px 460px at 50% -8%, color-mix(in srgb, var(--verified) 18%, transparent), transparent 70%),
+    radial-gradient(720px 420px at 96% 40%, color-mix(in srgb, var(--chain) 16%, transparent), transparent 72%);
+}
+
+@utility section-wash-default {
+  background: radial-gradient(
+    900px 480px at 50% -6%,
+    color-mix(in srgb, var(--primary) 14%, transparent),
+    transparent 72%
+  );
+}
+
+@utility header-accent {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--primary) 14%, transparent) 0%,
+    transparent 42%,
+    color-mix(in srgb, var(--chain) 12%, transparent) 100%
+  );
+}
+
+
+@utility glass-panel {
+  background-color: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 12px 32px -18px rgba(2, 6, 16, 0.9);
+}
+
+@utility mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "ss01";
+  letter-spacing: -0.01em;
+}
+
+@utility glow-primary {
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.35),
+    0 10px 30px -12px rgba(37, 99, 235, 0.55);
+}
+
+@utility radial-glow {
+  position: relative;
+  isolation: isolate;
+}
+
+@keyframes slidms-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slidms-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slidms-pulse-danger {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes slidms-scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(400%);
+  }
+}
+
+@utility animate-fade-in {
+  animation: slidms-fade-in 0.35s ease-out both;
+}
+
+@utility animate-slide-up {
+  animation: slidms-slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-pulse-danger {
+  animation: slidms-pulse-danger 1.6s ease-in-out infinite;
+}
+
+@utility animate-scan {
+  animation: slidms-scan 1.6s ease-in-out infinite;
+}

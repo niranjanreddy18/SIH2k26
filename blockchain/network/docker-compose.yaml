@@ -71,6 +71,7 @@ services:
     image: hyperledger/fabric-peer:2.5
     environment:
       - FABRIC_LOGGING_SPEC=INFO
+      - DOCKER_API_VERSION=1.41
       - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
       - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=slidms_fabric_network
       - CORE_PEER_TLS_ENABLED=true
@@ -123,6 +124,7 @@ services:
     image: hyperledger/fabric-peer:2.5
     environment:
       - FABRIC_LOGGING_SPEC=INFO
+      - DOCKER_API_VERSION=1.41
       - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
       - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=slidms_fabric_network
       - CORE_PEER_TLS_ENABLED=true
@@ -175,6 +177,7 @@ services:
     image: hyperledger/fabric-peer:2.5
     environment:
       - FABRIC_LOGGING_SPEC=INFO
+      - DOCKER_API_VERSION=1.41
       - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
       - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=slidms_fabric_network
       - CORE_PEER_TLS_ENABLED=true
@@ -270,6 +273,7 @@ services:
     environment:
       - GOPATH=/opt/gopath
       - FABRIC_LOGGING_SPEC=INFO
+      - DOCKER_API_VERSION=1.41
       - CORE_PEER_ID=cli
       - CORE_PEER_ADDRESS=peer0.police.slidms.gov.in:7051
       - CORE_PEER_LOCALMSPID=PoliceDeptMSP
@@ -290,3 +294,25 @@ services:
       - peer0.judiciary.slidms.gov.in
     networks:
       - slidms_network
+
+  # ─── Chaincode Service (CCAAS) ───────────────────────────────────────────
+  slidms-cc.police.slidms.gov.in:
+    container_name: slidms-cc.police.slidms.gov.in
+    image: node:18-alpine
+    restart: always
+    environment:
+      - CORE_CHAINCODE_LOGLEVEL=info
+    working_dir: /chaincode
+    command: sh -c "npx fabric-chaincode-node server --chaincode-address=0.0.0.0:9999 --chaincode-id=slidms-cc_1.0:f6c5e1445391cb0e95e9796387dcc65ea8fb49f1fce02a67b10701a82ede8220"
+    volumes:
+      - ../chaincode:/chaincode
+    ports:
+      - 9999:9999
+    networks:
+      slidms_network:
+        aliases:
+          - slidms-cc.police.slidms.gov.in
+          - slidms-cc
+
+
+

@@ -151,6 +151,10 @@ router.get('/cases/:caseId/documents', authenticateJWT, async (req: AuthRequest,
   const statusFilter = req.query.status as string | undefined;
   const user = req.user!;
 
+  if (!caseId || !isUUID(caseId)) {
+    return sendError(res, 'NOT_FOUND', `Case ${caseId} not found.`, 404);
+  }
+
   const caseRow = await pool.query(`SELECT id FROM cases WHERE id = $1`, [caseId]);
   if (!caseRow.rows[0] || !(await hasCaseAccess(caseId, user))) {
     return sendError(res, 'NOT_FOUND', `Case ${caseId} not found.`, 404);
@@ -320,7 +324,8 @@ router.get('/documents/:id/preview', authenticateJWT, async (req: AuthRequest, r
     const fileBuffer = await StorageService.getFile(doc.storage_key);
     await logAuditEvent(user.id, 'DOCUMENT_PREVIEWED', 'DOCUMENT', id);
     res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${doc.name}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.name)}"`);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Length', fileBuffer.length.toString());
     return res.send(fileBuffer);
   } catch (err: any) {
@@ -355,7 +360,8 @@ async function serveHistoricalVersion(req: AuthRequest, res: Response, dispositi
     const fileBuffer = await StorageService.getFile(ver.storage_key);
     await logAuditEvent(user.id, disposition === 'inline' ? 'DOCUMENT_PREVIEWED' : 'DOCUMENT_DOWNLOADED', 'DOCUMENT', id);
     res.setHeader('Content-Type', ver.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `${disposition}; filename="${ver.name} (v${verNo})"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(ver.name)} (v${verNo})"`);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Length', fileBuffer.length.toString());
     return res.send(fileBuffer);
   } catch (err: any) {

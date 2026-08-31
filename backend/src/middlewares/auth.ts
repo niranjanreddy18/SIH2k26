@@ -20,13 +20,18 @@ export interface AuthRequest extends Request {
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunction): any => {
-  const authHeader = req.headers.authorization;
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return sendError(res, 'AUTH_TOKEN_EXPIRED', 'Access token is missing or malformed.', 401);
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (typeof req.query.token === 'string' && req.query.token) {
+    token = req.query.token;
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return sendError(res, 'AUTH_TOKEN_EXPIRED', 'Access token is missing or malformed.', 401);
+  }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthenticatedUser;

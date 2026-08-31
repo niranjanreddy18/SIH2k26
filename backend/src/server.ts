@@ -36,7 +36,12 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Security & Body parsing middlewares
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+  frameguard: false,
+  contentSecurityPolicy: false,
+}));
 app.use(cors({
   origin: true,
   credentials: true

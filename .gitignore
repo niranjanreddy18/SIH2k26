@@ -1,42 +1,71 @@
 # ─── Dependencies ────────────────────────────────────────────────────────────
 node_modules/
-*/node_modules/
+**/node_modules/
 
 # ─── Package lock backups ────────────────────────────────────────────────────
 package-lock.json.backup
 
-# ─── Production Builds ───────────────────────────────────────────────────────
+# ─── Production & SSR Builds ────────────────────────────────────────────────
 dist/
-*/dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
 build/
-*/build/
+**/build/
 out/
-*/out/
+**/out/
+.output/
+**/.output/
+.nitro/
+**/.nitro/
+.vinxi/
+**/.vinxi/
+.tanstack/
+**/.tanstack/
 .next/
-*/.next/
+**/.next/
+.wrangler/
+**/.wrangler/
 
 # ─── TypeScript ──────────────────────────────────────────────────────────────
 *.tsbuildinfo
-*/*.tsbuildinfo
+**/*.tsbuildinfo
 
 # ─── Environment variables & secrets ─────────────────────────────────────────
 .env
 .env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.dev.vars
+**/.dev.vars
+**/.env
+**/.env.*
 !.env.example
 !**/.env.example
-backend/.env
-frontend/.env
+
+# ─── Cryptographic keys & certs (Never commit secrets) ──────────────────────
+*.key
+*.pem
+*.pfx
+*.pkcs12
+*.crt
+*.csr
+backend/certs/
+**/certs/
 
 # ─── Local storage & file uploads ────────────────────────────────────────────
 storage_data/
-*/storage_data/
+**/storage_data/
 uploads/
-*/uploads/
+**/uploads/
 temp/
-*/temp/
+**/temp/
 
 # ─── Logs ────────────────────────────────────────────────────────────────────
 logs/
+**/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -44,18 +73,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# ─── Runtime data & temp files ───────────────────────────────────────────────
+# ─── Runtime data & cache ───────────────────────────────────────────────────
 *.pid
 *.seed
 *.pid.lock
 .pnpm-store
 .turbo
 .cache/
-*/.cache/
+**/.cache/
 
 # ─── Test & Coverage ─────────────────────────────────────────────────────────
 coverage/
-*/coverage/
+**/coverage/
 .nyc_output/
 
 # ─── IDE & Editor ────────────────────────────────────────────────────────────
@@ -83,16 +112,12 @@ desktop.ini
 scratch/
 .system_generated/
 
-# ─── Hyperledger Fabric: downloaded binaries (fetched by install-fabric.sh) ──
+# ─── Hyperledger Fabric: binaries & crypto material ──────────────────────────
 blockchain/bin/
 blockchain/builders/
-
-# ─── Hyperledger Fabric: generated crypto material — NEVER commit private keys
 blockchain/organizations/fabric-ca/
 blockchain/organizations/ordererOrganizations/
 blockchain/organizations/peerOrganizations/
-
-# ─── Hyperledger Fabric: generated channel artifacts & chaincode packages ───
 blockchain/channel-artifacts/
 blockchain/chaincode/dist/
 *.tar.gz
