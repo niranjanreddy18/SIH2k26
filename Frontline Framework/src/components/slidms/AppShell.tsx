@@ -49,7 +49,7 @@ const NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/cases", label: "Cases", icon: FolderOpen },
   { to: "/documents", label: "Documents", icon: FileText },
-  { to: "/evidence", label: "Evidence", icon: FileStack },
+  // { to: "/evidence", label: "Evidence", icon: FileStack },
   { to: "/audit", label: "Audit Trail", icon: ScrollText },
   { to: "/shared", label: "Shared", icon: Share2 },
   { to: "/diagnostics", label: "API Diagnostics", icon: PlugZap },

@@ -3,6 +3,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
   AlertTriangle,
+  ArrowRightLeft,
   Box,
   Clock,
   Download,
@@ -46,6 +47,7 @@ import {
 import { SecureDocumentViewer } from "@/components/slidms/SecureDocumentViewer";
 import { UploadDocumentDialog } from "@/components/slidms/UploadDocumentDialog";
 import { RegisterEvidenceDialog } from "@/components/slidms/RegisterEvidenceDialog";
+import { TransferCustodyDialog } from "@/components/slidms/TransferCustodyDialog";
 import {
   Dialog,
   DialogContent,
@@ -137,6 +139,7 @@ function CaseDetailPage() {
   // Modals & Actions
   const [uploadOpen, setUploadOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [transferEvidence, setTransferEvidence] = useState<{ id: string; name: string } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
 
@@ -627,6 +630,14 @@ function CaseDetailPage() {
                   <div className="flex items-center gap-2">
                     <EvidenceStatusBadge status={e.status} />
                     <span className="mono text-[11px] text-chain">{shortHash((e as any).hash ?? (e as any).currentHash ?? e.id, 6)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setTransferEvidence({ id: e.id, name: e.description || e.type })}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-95"
+                      title="Transfer custody or hand over to forensics lab"
+                    >
+                      <ArrowRightLeft className="size-3" /> Transfer / Forensics
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1030,6 +1041,14 @@ function CaseDetailPage() {
         open={evidenceOpen}
         onOpenChange={setEvidenceOpen}
         caseId={id}
+      />
+
+      {/* 6. Evidence Custody Transfer & Forensics Handover Dialog */}
+      <TransferCustodyDialog
+        id={transferEvidence?.id ?? null}
+        evidenceName={transferEvidence?.name}
+        caseId={id}
+        onClose={() => setTransferEvidence(null)}
       />
     </AppShell>
   );

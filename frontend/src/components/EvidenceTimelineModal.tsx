@@ -25,8 +25,10 @@ export const EvidenceTimelineModal: React.FC<Props> = ({
   const [loadError, setLoadError] = useState(false);
   const [officers, setOfficers] = useState<User[]>([]);
   const [showTransferForm, setShowTransferForm] = useState(false);
+  const [actionType, setActionType] = useState('TRANSFERRED_TO_FORENSICS');
   const [toUserId, setToUserId] = useState('');
   const [reason, setReason] = useState('');
+  const [tamperSealNumber, setTamperSealNumber] = useState('');
   const [transferring, setTransferring] = useState(false);
 
   const fetchCustodyEvents = async () => {
@@ -65,12 +67,15 @@ export const EvidenceTimelineModal: React.FC<Props> = ({
     try {
       const res = await api.post(`/evidence/${evidenceId}/transfer`, {
         toUserId,
-        reason: reason || 'Forensic lab analysis transfer'
+        action: actionType,
+        reason: reason || 'Forensic lab analysis transfer',
+        tamperSealNumber: tamperSealNumber.trim() || undefined,
       });
       if (res.data.success) {
-        toast.success('Custody transferred.');
+        toast.success('Custody transferred and recorded on blockchain ledger.');
         setShowTransferForm(false);
         setReason('');
+        setTamperSealNumber('');
         await fetchCustodyEvents();
         onCustodyUpdated?.();
       }
@@ -158,26 +163,57 @@ export const EvidenceTimelineModal: React.FC<Props> = ({
                     Cancel
                   </button>
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }}>
+                      Transfer Purpose / Stage *
+                    </label>
+                    <select
+                      value={actionType}
+                      onChange={e => setActionType(e.target.value)}
+                      style={{ ...inputStyle }}
+                    >
+                      <option value="TRANSFERRED_TO_FORENSICS">🔬 Transfer to Forensics Lab</option>
+                      <option value="ANALYSIS_IN_PROGRESS">🧪 Forensic Analysis In Progress</option>
+                      <option value="RETURNED_TO_VAULT">🔐 Return to Central Vault</option>
+                      <option value="PRODUCED_IN_COURT">⚖️ Produce in Judicial Court</option>
+                      <option value="OFFICER_HANDOVER">👮 Internal Officer Handover</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }}>
+                      Tamper Seal Bag # (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SEAL-9921-CYBER"
+                      value={tamperSealNumber}
+                      onChange={e => setTamperSealNumber(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
                 <div>
                   <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }}>
-                    Recipient Officer *
+                    Recipient Officer / Specialist *
                   </label>
                   <select value={toUserId} onChange={e => setToUserId(e.target.value)} style={{ ...inputStyle }} disabled={officers.length === 0}>
                     {officers.length === 0 && <option>Loading officer directory...</option>}
                     {officers.map(o => (
                       <option key={o.id} value={o.id}>
-                        {o.name} — {o.role.replace('_', ' ')}{o.department ? ` (${o.department})` : ''}
+                        {o.name} — {o.role.replace(/_/g, ' ')}{o.department ? ` (${o.department})` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }}>
-                    Reason / Examination Memo
+                    Reason / Examination Memo *
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Forensic memory dump recovery & drive analysis"
+                    required
+                    placeholder="e.g. Forensic bit-stream imaging & deleted partition extraction under Sec 65B"
                     value={reason}
                     onChange={e => setReason(e.target.value)}
                     style={inputStyle}

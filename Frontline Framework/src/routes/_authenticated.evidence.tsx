@@ -14,6 +14,7 @@ import {
   SectionGlow,
 } from "@/components/slidms/panels";
 import { RegisterEvidenceDialog } from "@/components/slidms/RegisterEvidenceDialog";
+import { TransferCustodyDialog } from "@/components/slidms/TransferCustodyDialog";
 import {
   Dialog,
   DialogContent,
@@ -276,6 +277,17 @@ function EvidencePage() {
             title="Custody Timeline"
             subtitle="Tamper-evident handover chain"
             icon={ShieldCheck}
+            action={
+              activeId ? (
+                <button
+                  type="button"
+                  onClick={() => setTransferFor(activeId)}
+                  className="glow-primary inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-primary to-primary-bright px-3 py-1.5 text-xs font-bold text-primary-foreground transition-transform active:scale-95"
+                >
+                  <ArrowRightLeft className="size-3.5" /> Transfer Custody / Forensics
+                </button>
+              ) : undefined
+            }
           />
           {timeline.isLoading ? (
             <LoadingBlock label="Rebuilding custody chain" />
@@ -321,7 +333,11 @@ function EvidencePage() {
         </GlassPanel>
       </div>
 
-      <TransferDialog id={transferFor} onClose={() => setTransferFor(null)} />
+      <TransferCustodyDialog
+        id={transferFor}
+        evidenceName={items.find((e: any) => e.id === transferFor)?.description || items.find((e: any) => e.id === transferFor)?.type}
+        onClose={() => setTransferFor(null)}
+      />
 
       <RegisterEvidenceDialog
         open={registerOpen}
@@ -330,69 +346,5 @@ function EvidencePage() {
         cases={cases}
       />
     </AppShell>
-  );
-}
-
-function TransferDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [toUserId, setToUserId] = useState(MOCK_DIRECTORY[0]?.id ?? "");
-  const [reason, setReason] = useState("");
-
-  const mutation = useMutation({
-    mutationFn: () => evidenceService.transfer(id!, { toUserId, reason }),
-    onSuccess: () => {
-      toast.success("Custody transferred and hash-linked");
-      qc.invalidateQueries({ queryKey: ["evidence"] });
-      onClose();
-    },
-    onError: (error) => toast.error(errorMessage(error, "Unable to transfer custody.")),
-  });
-
-  return (
-    <Dialog open={Boolean(id)} onOpenChange={(o) => (!o ? onClose() : null)}>
-      <DialogContent className="border-border bg-card">
-        <DialogHeader>
-          <DialogTitle>Transfer Custody</DialogTitle>
-          <DialogDescription>
-            The handover is recorded as a new hash-linked custody event.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            mutation.mutate();
-          }}
-        >
-          <select
-            value={toUserId}
-            onChange={(e) => setToUserId(e.target.value)}
-            className="h-9 w-full rounded-lg border border-input bg-background-raised px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
-          >
-            {MOCK_DIRECTORY.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} — {u.role.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
-          <textarea
-            required
-            rows={3}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for transfer (e.g. forensic imaging of seized device)"
-            className="w-full rounded-lg border border-input bg-background-raised p-3 text-xs text-foreground placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-ring/40"
-          />
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="glow-primary inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-linear-to-r from-primary to-primary-bright text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Confirm Transfer
-          </button>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

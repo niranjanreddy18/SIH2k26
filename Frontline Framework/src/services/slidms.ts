@@ -90,8 +90,16 @@ export const evidenceService = {
     post<EvidenceItem>(`/cases/${caseId}/evidence`, body),
   timeline: (id: string) =>
     get<{ evidenceId: string; items: CustodyEvent[] } | CustodyEvent[]>(`/evidence/${id}/timeline`),
-  transfer: (id: string, body: { toUserId: string; reason: string }) =>
-    post<unknown>(`/evidence/${id}/transfer`, body),
+  transfer: (
+    id: string,
+    body: {
+      toUserId: string;
+      reason: string;
+      action?: string | undefined;
+      status?: string | undefined;
+      tamperSealNumber?: string | undefined;
+    },
+  ) => post<unknown>(`/evidence/${id}/transfer`, body),
 };
 
 /* --------------------------------- Shares --------------------------------- */
